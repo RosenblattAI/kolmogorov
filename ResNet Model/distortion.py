@@ -1,6 +1,5 @@
 #! /usr/bin/env python3
 
-import cv2
 import os
 import pathlib
 import random
@@ -15,6 +14,7 @@ except:
     import numpy as np
     from numpy.fft import ifft2, fft2
     using_cupy = False
+from cv2 import cv2
 import matplotlib.pyplot as plt
 from aotools.turbulence.infinitephasescreen import PhaseScreenKolmogorov
 
@@ -109,7 +109,7 @@ def atmospheric_distort_image_file(filepath, output_directory, aperture_size=8, 
     if using_cupy:
         img = np.asnumpy(img)
 
-    filename, ext = os.path.splitext(filepath.name)
+    filename, _ = os.path.splitext(filepath.name)
     new_filename = make_distorted_image_filename(filename)
     new_filepath = output_directory/str(filepath).replace(filename, new_filename)
 
@@ -139,15 +139,14 @@ if __name__ == '__main__':
     if len(sys.argv) != 4:
         print('Invalid command usage:')
         print('Proper usage (replace <> fields with values):')
-        print('\tdistortion <directory relative path> <file matcher string> <output_directory>')
-
-    try:
-       directory_path = sys.argv[1]
-       file_glob_matcher = sys.argv[2]
-       output_directory = sys.argv[3]
-       atmospheric_distort_directory(directory_path, file_glob_matcher, output_directory)
-       print('Completed applying distortion to images')
-    except Exception as e:
-       print('Failed to apply distortion to images -- {}'.format(str(e)))
-       raise e
-
+        print('\t<distortion> <directory relative path> <file matcher string> <output_directory>')
+    else:
+        try:
+            directory_path = sys.argv[1]
+            file_glob_matcher = sys.argv[2]
+            output_directory = sys.argv[3]
+            atmospheric_distort_directory(directory_path, file_glob_matcher, output_directory)
+            print('Completed applying distortion to images')
+        except Exception as e:
+            print('Failed to apply distortion to images -- {}'.format(str(e)))
+            raise e 

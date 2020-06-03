@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
-using System.Threading; // for hacky solution
+using System; // for hacky solution
 
 // Author: Ryan James Walden
 
@@ -37,7 +37,7 @@ public class Generator : MonoBehaviour
         // Setup default arguments
         int resWidth = 224;
         int resHeight = 224;
-        int samples = 1000;
+        int samples = 1;
 
         // Get args type
         var argsType = args.GetType();
@@ -72,7 +72,23 @@ public class Generator : MonoBehaviour
         // Setup the observatory
         SetupTextures(resWidth, resHeight);
 
+        // Setup PythonNet
+        // https://github.com/pythonnet/pythonnet/wiki/Threading
+        // PythonEngine.Initialize();
+        // var m_threadState = PythonEngine.BeginAllowThreads();
+
+        /*
+            Unity Coroutines use concurrency and Threads use parallelism. 
+            The Unity API is not Thread-safe and you are allowed to create 
+            Threads without any practical limitations.
+        */
+
+        // Begin generating images
         StartCoroutine(GenerateSatellitesAndTakeImages(resWidth, resHeight, samples));
+
+        // Shutdown PythonNet
+        // PythonEngine.EndAllowThreads(m_threadState);
+        // PythonEngine.Shutdown();
     }
 
     private IEnumerator GenerateSatellitesAndTakeImages(int resWidth, int resHeight, int samples)
@@ -196,7 +212,18 @@ public class Generator : MonoBehaviour
             _screenshotTexture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
 
             // Gets the correct size but unsure about location
-            // Color[] img = ScreenShot.GetPixels(0, 0, resWidth, resHeight);
+            Color[] img = _screenshotTexture.GetPixels(0, 0, width, height);
+
+            // acquire the GIL before using the Python interpreter
+            using (Py.GIL())
+            {
+                // use the python module to blur the image
+                dynamic distortion = Py.Import("distortion");
+                dynamic blur = distortion.atmospheric_distort;
+                dynamic test = np.array(img);
+                //dynamic blurImg = blur(img);
+                Debug.Log("test datatype", test.dtype);
+            } 
 
             // Save the screenshot to PNG in the corresponding satellite directory
             byte[] bytes = _screenshotTexture.EncodeToPNG();
