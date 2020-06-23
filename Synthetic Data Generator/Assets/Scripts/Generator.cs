@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
-using System; // for hacky solution
 
 // Author: Ryan James Walden
 
@@ -37,7 +36,7 @@ public class Generator : MonoBehaviour
         // Setup default arguments
         int resWidth = 224;
         int resHeight = 224;
-        int samples = 1;
+        int samples = 250;
 
         // Get args type
         var argsType = args.GetType();
@@ -156,7 +155,6 @@ public class Generator : MonoBehaviour
         _camera.transform.LookAt(b.center);
     }
 
-
     private void CleanupObservatory()
     {
         _camera.targetTexture = null;
@@ -215,6 +213,7 @@ public class Generator : MonoBehaviour
             Color[] img = _screenshotTexture.GetPixels(0, 0, width, height);
 
             // acquire the GIL before using the Python interpreter
+            /*
             using (Py.GIL())
             {
                 // use the python module to blur the image
@@ -223,7 +222,8 @@ public class Generator : MonoBehaviour
                 dynamic test = np.array(img);
                 //dynamic blurImg = blur(img);
                 Debug.Log("test datatype", test.dtype);
-            } 
+            }
+            */ 
 
             // Save the screenshot to PNG in the corresponding satellite directory
             byte[] bytes = _screenshotTexture.EncodeToPNG();
