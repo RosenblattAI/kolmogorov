@@ -149,6 +149,21 @@ public class Generator : MonoBehaviour
         Debug.Log("Observatory cleanup complete");
     }
 
+    private Vector3 GetSatelliteOrientation(GameObject Satellite)
+    {
+        // get relative orientation of satellite from observatory
+        // Get rotation necessary to orient satellite towards observatory
+        // (if satellite was rotated with the calculated vector, the appearance would depend on neutral orientation of satellite)
+        // incorporate the "up" direction of the observatory
+
+        var direction = _camera.transform.position - Satellite.transform.position;
+        Quaternion quat_rotation = Quaternion.LookRotation(direction, _camera.transform.up);
+        Vector3 rotation = quat_rotation.eulerAngles;
+        Debug.Log("Relative Obs-Sat angle: " + rotation);
+
+        return rotation;
+    }
+
 
     //IEnumerator
     private IEnumerator GenerateImages(GameObject Satellite, int width, int height, int iterations)
@@ -178,6 +193,7 @@ public class Generator : MonoBehaviour
 
             // Focus the camera on the object
             FocusObservatoryOnSatellite(Satellite, Random.Range(0.75f, 2f));
+            Vector3 orientation = GetSatelliteOrientation(Satellite);
 
             // Focus the sun on the object
             _sunTransform.rotation = _camera.transform.rotation;
@@ -200,7 +216,12 @@ public class Generator : MonoBehaviour
 
             // Save the screenshot to PNG in the corresponding satellite directory
             byte[] bytes = _screenshotTexture.EncodeToPNG();
-            string filename = string.Format(outputPath + "/{0}x{1}_{2}.png", width, height, i);
+            string filename = string.Format(
+                outputPath + "/{0}x{1}_{2}_{3}.png",
+                width,
+                height,
+                orientation,
+                i);
             File.WriteAllBytes(filename, bytes);
             yield return null;
         }
