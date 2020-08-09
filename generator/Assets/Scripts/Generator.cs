@@ -164,6 +164,11 @@ public class Generator : MonoBehaviour
         return rotation;
     }
 
+    private string EulerAngleToString(Vector3 orientation)
+    {
+        return string.Format("{1},{2},{3}", orientation.x, orientation.y, orientation.z);
+    }
+
 
     //IEnumerator
     private IEnumerator GenerateImages(GameObject Satellite, int width, int height, int iterations)
@@ -194,6 +199,7 @@ public class Generator : MonoBehaviour
             // Focus the camera on the object
             FocusObservatoryOnSatellite(Satellite, Random.Range(0.75f, 2f));
             Vector3 orientation = GetSatelliteOrientation(Satellite);
+            string parsedOrientation = EulerAngleToString(orientation);
 
             // Focus the sun on the object
             _sunTransform.rotation = _camera.transform.rotation;
@@ -220,7 +226,7 @@ public class Generator : MonoBehaviour
                 outputPath + "/{0}x{1}_{2}_{3}.png",
                 width,
                 height,
-                orientation,
+                parsedOrientation,
                 i);
             File.WriteAllBytes(filename, bytes);
             yield return null;
