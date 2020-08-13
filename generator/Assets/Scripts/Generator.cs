@@ -157,7 +157,7 @@ public class Generator : MonoBehaviour
         // incorporate the "up" direction of the observatory
 
         var direction = _camera.transform.position - Satellite.transform.position;
-        Quaternion quat_rotation = Quaternion.LookRotation(direction, _camera.transform.up);
+        Quaternion quat_rotation = Quaternion.LookRotation(direction, Satellite.transform.up);
         Vector3 rotation = quat_rotation.eulerAngles;
         Debug.Log("Relative Obs-Sat angle: " + rotation);
 
@@ -166,7 +166,7 @@ public class Generator : MonoBehaviour
 
     private string EulerAngleToString(Vector3 orientation)
     {
-        return string.Format("{1},{2},{3}", orientation.x, orientation.y, orientation.z);
+        return string.Format("{0},{1},{2}", orientation.x.ToString(), orientation.y.ToString(), orientation.z.ToString());
     }
 
 
