@@ -4,7 +4,6 @@ import cv2
 import os
 import pathlib
 import random
-import sys
 import time
 try:
     import cupy as np
@@ -18,13 +17,8 @@ except Exception as e:
 import matplotlib.pyplot as plt
 from aotools.turbulence.infinitephasescreen import PhaseScreenKolmogorov
 
-
 PSK = None
-DEFAULT_APERTURE_SIZE=8
-DEFAULT_FRIED_PARAM=0.381
-DEFAULT_OUTER_SCALE=100
-DEFAULT_RANDOM_SEED=None
-DEFAULT_STENCIL_LENGTH_FACTOR=32
+
 
 def create_circular_mask(h, w, center=None, radius=None):
     # https://stackoverflow.com/questions/44865023/how-can-i-create-a-circular-mask-for-a-numpy-array
@@ -39,6 +33,7 @@ def create_circular_mask(h, w, center=None, radius=None):
 
     mask = dist_from_center <= radius
     return mask.astype(int)
+
 
 def circular_aperture(img):
     orig_dim = img.shape
@@ -62,11 +57,11 @@ def circular_aperture(img):
 
     return pupil_mask
 
+
 def atmospheric_distort(img, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor):
      '''Apply atmospheric distortion to input image
      Parameters:
          img (numpy.ndarray): Image to be distorted
-         intensity (int): level of distortion 5 - minimal, 11 - medium, 20 - high
          aperture_size (int): size of capturing aperture in meters
          fried_param (float): size of atmospheric coherence length (Fried param) in meters
          outer_scale (int): It's in the AOTools Kolmogorov Phase Screen docs
@@ -103,6 +98,7 @@ def atmospheric_distort(img, aperture_size, fried_param, outer_scale, random_see
      img_slice *= 255
      return np.repeat(img_slice[:,:,np.newaxis], 3, axis=2)
 
+
 def atmospheric_distort_image_file(filepath, output_directory, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor):
     def make_distorted_image_filename(filename):
         return '{}_{}_{}_{}_{}'.format(filename, aperture_size, fried_param, outer_scale, stencil_length_factor)
@@ -116,23 +112,22 @@ def atmospheric_distort_image_file(filepath, output_directory, aperture_size, fr
 
     filename, ext = os.path.splitext(filepath.name)
     new_filename = make_distorted_image_filename(filename)
-    new_filepath = output_directory/str(filepath).replace(filename, new_filename)
+    new_filepath = output_directory/str(filepath).replace(str(filename), new_filename)
+    # print(new_filepath)
 
     new_filepath.parents[0].mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(new_filepath), img)
     return new_filepath
 
+
 # default to Dr0 (aperture_size/fried_param) of 7 (low strength) -- 5 > low, 15 > med, 21 > strong 
 def atmospheric_distort_directory(directory_string, file_glob_matcher, output_directory, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor):
-    #try:
     directory = pathlib.Path(directory_string)
     output_directory = pathlib.Path(output_directory)
 
     for path in directory.glob(file_glob_matcher):
-            #try:
         # print('attempting to distort image at: {}'.format(str(path)))
-        start = time.time()
-        new_file = atmospheric_distort_image_file(
+        atmospheric_distort_image_file(
             path,
             output_directory,
             aperture_size,
@@ -141,43 +136,3 @@ def atmospheric_distort_directory(directory_string, file_glob_matcher, output_di
             random_seed,
             stencil_length_factor
         )
-        end = time.time()
-        # print('distorted image created({}) at: {}'.format(end-start, str(new_file)))
-            #except Exception as e:
-            #    print('Unable to apply atmospheric distortion to file at: {} -- {}'.format(str(path), str(e)))
-    #except Exception as e:
-    #    print('Unable to process given directory: {}'.format(str(e)))
-    #    raise e
-
-if __name__ == '__main__':
-    if len(sys.argv) != 4 and len(sys.argv) != 9:
-        print('Invalid command usage:')
-        print('Proper usage (replace <> fields with values):')
-        print('\tdistortion <directory relative path> <file matcher string> <output_directory>')
-        print('  Or')
-        print('\tdistortion <directory relative path> <file matcher string> <output_directory> <aperture_size> <fried_param> <outer_scale> <random_seed> <stencil_length_factor>')
-        sys.exit(1)
-
-    try:
-        directory_path = sys.argv[1]
-        file_glob_matcher = sys.argv[2]
-        output_directory = sys.argv[3]
-       
-        if len(sys.argv) == 9:
-            aperture_size=float(sys.argv[4])
-            fried_param=float(sys.argv[5])
-            outer_scale=float(sys.argv[6])
-            random_seed=None if sys.argv[7].lower() == 'none' else int(sys.argv[7])
-            stencil_length_factor=int(sys.argv[8])
-        else:
-            aperture_size=DEFAULT_APERTURE_SIZE
-            fried_param=DEFAULT_FRIED_PARAM
-            outer_scale=DEFAULT_OUTER_SCALE
-            random_seed=DEFAULT_RANDOM_SEED
-            stencil_length_factor=DEFAULT_STENCIL_LENGTH_FACTOR
-
-        atmospheric_distort_directory(directory_path, file_glob_matcher, output_directory, aperture_size=8, fried_param=0.381, outer_scale=100, random_seed=None, stencil_length_factor=32)
-        print('Completed applying distortion to images')
-    except Exception as e:
-        print('Failed to apply distortion to images -- {}'.format(str(e)))
-        raise e
