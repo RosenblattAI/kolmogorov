@@ -136,7 +136,7 @@ public class Generator : MonoBehaviour
         Vector3 max = b.size;
         float radius = Mathf.Max(max.x, Mathf.Max(max.y, max.z));
         float dist = radius / (Mathf.Sin(_camera.fieldOfView * Mathf.Deg2Rad / 2f));
-        _camera.transform.position = Random.onUnitSphere * dist * magnification + b.center;
+        _camera.transform.position = Random.onUnitSphere * dist / magnification + b.center;
         _camera.transform.LookAt(b.center);
     }
 
@@ -173,7 +173,13 @@ public class Generator : MonoBehaviour
     //IEnumerator
     private IEnumerator GenerateImages(GameObject Satellite, int width, int height, int iterations)
     {
-        // Grab the sun for transformations
+        float[] XVals = new float[iterations];
+        float[] YVals = new float[iterations];
+        float[] ZVals = new float[iterations];
+
+        float[] CalculatedXVals = new float[iterations];
+        float[] CalculatedYVals = new float[iterations];
+        float[] CalculatedZVals = new float[iterations];
 
         // Local for loop for now, want to distribute and parallelize eventually
         for (int i = 0; i < iterations; i++)
@@ -192,17 +198,26 @@ public class Generator : MonoBehaviour
 
             // Why do you rotate it here? lol
             // Randomly orient the satellite
-            Satellite.transform.Rotate(new Vector3(Random.Range(0f, 360f),
-                                                   Random.Range(0f, 360f),
-                                                   Random.Range(0f, 360f)));
+            XVals[i] = Random.Range(0f, 360f);
+            YVals[i] = Random.Range(0f, 360f);
+            ZVals[i] = Random.Range(0f, 360f);
+            Satellite.transform.Rotate(new Vector3(XVals[i],
+                                                   YVals[i],
+                                                   ZVals[i]));
 
             // Focus the camera on the object
             FocusObservatoryOnSatellite(Satellite, Random.Range(0.75f, 2f));
-            Vector3 orientation = GetSatelliteOrientation(Satellite);
-            string parsedOrientation = EulerAngleToString(orientation);
+            Vector3 vector3Orientation = GetSatelliteOrientation(Satellite);
+            string orientation = EulerAngleToString(vector3Orientation);
+
+            CalculatedXVals[i] = vector3Orientation.x;
+            CalculatedYVals[i] = vector3Orientation.y;
+            CalculatedZVals[i] = vector3Orientation.z;
 
             // Focus the sun on the object
             _sunTransform.rotation = _camera.transform.rotation;
+
+            float distance = Vector3.Distance(_camera.transform.position, Satellite.transform.position);
 
             // Probably should change this
             // get main camera and manually render scene into rt
@@ -223,13 +238,32 @@ public class Generator : MonoBehaviour
             // Save the screenshot to PNG in the corresponding satellite directory
             byte[] bytes = _screenshotTexture.EncodeToPNG();
             string filename = string.Format(
-                outputPath + "/{0}x{1}_{2}_{3}.png",
+                outputPath + "/{0}_{1}x{2}_{3}_{4}.png",
+                i,
                 width,
                 height,
-                parsedOrientation,
-                i);
+                orientation,
+                distance);
             File.WriteAllBytes(filename, bytes);
             yield return null;
         }
+
+        string origpath = "orientation_vals";
+        string calcpath = "extracted_vals";
+
+        StreamWriter writerO = new StreamWriter(origpath);
+        StreamWriter writerE = new StreamWriter(calcpath);
+        writerO.WriteLine("x,y,z");
+        writerE.WriteLine("x,y,z");
+
+        for (int i = 0; i < iterations; i++) {
+            writerO.WriteLine(string.Format("{0},{1},{2}", XVals[i].ToString(), YVals[i].ToString(), ZVals[i].ToString()));
+            writerE.WriteLine(string.Format("{0},{1},{2}", CalculatedXVals[i].ToString(), CalculatedYVals[i].ToString(), CalculatedZVals[i].ToString()));
+        }
+
+        writerE.Flush();
+        writerO.Flush();
+        writerE.Close();
+        writerO.Close();
     }
 }

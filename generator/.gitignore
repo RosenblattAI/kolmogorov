@@ -73,3 +73,6 @@ crashlytics-build.properties
 Dataset/*
 Assets/Resourecs/Satellites/*
 Assets/Resources/Satellites.meta
+
+orientation_vals
+extracted_vals
