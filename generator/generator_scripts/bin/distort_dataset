@@ -1,0 +1,45 @@
+#! /usr/bin/env python3
+
+import os
+import sys
+
+from generator_scripts.distortion import atmospheric_distort_directory
+
+DEFAULT_APERTURE_SIZE=4
+DEFAULT_FRIED_PARAM=0.8
+DEFAULT_OUTER_SCALE=100
+DEFAULT_RANDOM_SEED=None
+DEFAULT_STENCIL_LENGTH_FACTOR=32
+
+if __name__ == '__main__':
+    if len(sys.argv) != 4 and len(sys.argv) != 9:
+        print('Invalid command usage:')
+        print('Proper usage (replace <> fields with values):')
+        print('\tdistortion <directory relative path> <file matcher string> <output_directory>')
+        print('  Or')
+        print('\tdistortion <directory relative path> <file matcher string> <output_directory> <aperture_size> <fried_param> <outer_scale> <random_seed> <stencil_length_factor>')
+        sys.exit(1)
+
+    try:
+        directory_path = sys.argv[1]
+        file_glob_matcher = sys.argv[2]
+        output_directory = sys.argv[3]
+       
+        if len(sys.argv) == 9:
+            aperture_size=float(sys.argv[4])
+            fried_param=float(sys.argv[5])
+            outer_scale=float(sys.argv[6])
+            random_seed=None if sys.argv[7].lower() == 'none' else int(sys.argv[7])
+            stencil_length_factor=int(sys.argv[8])
+        else:
+            aperture_size=DEFAULT_APERTURE_SIZE
+            fried_param=DEFAULT_FRIED_PARAM
+            outer_scale=DEFAULT_OUTER_SCALE
+            random_seed=DEFAULT_RANDOM_SEED
+            stencil_length_factor=DEFAULT_STENCIL_LENGTH_FACTOR
+
+        atmospheric_distort_directory(directory_path, file_glob_matcher, output_directory, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor)
+        print('Completed applying distortion to images')
+    except Exception as e:
+        print('Failed to apply distortion to images -- {}'.format(str(e)))
+        raise e

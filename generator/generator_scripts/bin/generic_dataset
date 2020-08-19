@@ -2,6 +2,7 @@
 
 import os
 import re
+import sys
 
 '''
 Note that the sample dir is expected to have the different classes (e.g.
@@ -37,10 +38,10 @@ if __name__ == '__main__':
     for distort_class, ratio in classes.items():
         img_dir = f'{samples_dir}/{distort_class}/'
 
-        TRAINING = lambda img_dir: img_dir + 'training'
-        VALIDATION = lambda img_dir: img_dir + 'validation'
+        TRAINING = lambda img_dir: img_dir + 'test'
+        # VALIDATION = lambda img_dir: img_dir + 'validation'
 
-        for SUBDIR in [TRAINING, VALIDATION]:
+        for SUBDIR in [TRAINING]: #, VALIDATION]:
             for sat in os.listdir(SUBDIR(img_dir)):
                 sat_dir = SUBDIR(img_dir)+'/'+sat
                 samples = [name for name in os.listdir(sat_dir)]

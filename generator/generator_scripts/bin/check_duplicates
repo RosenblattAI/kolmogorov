@@ -1,0 +1,26 @@
+#! /usr/bin/env python3
+
+import os
+import sys
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print('Missing target dir')
+        exit(1)
+
+    target_dir = sys.argv[1]
+    classes = next(os.walk(f'{target_dir}/training'))[1]
+
+    for c in classes:
+        rem_id = lambda x: x[x.index('_')+1:]
+        tr_set = set()
+        val_set = set()
+
+        for f in next(os.walk(os.path.join(target_dir, 'training', c)))[2]:
+            tr_set.add(rem_id(f))
+
+        for f in next(os.walk(os.path.join(target_dir, 'validation', c)))[2]:
+            val_set.add(rem_id(f))
+
+        print(len(tr_set))
+        print(len(val_set - tr_set))
