@@ -1,0 +1,9 @@
+{
+    "jobDefinitionName": "training",
+    "type": "container",
+    "containerProperties": {
+        "image": "751398683966.dkr.ecr.us-east-2.amazonaws.com/kolmogorov-model:training",
+        "vcpus": 2,
+        "memory": 32000
+    }
+}
