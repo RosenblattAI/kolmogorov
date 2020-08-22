@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import cv2
+import logging
 import os
 import pathlib
 import random
@@ -10,7 +11,7 @@ try:
     from cupy.fft import ifft2, fft2
     using_cupy = True
 except Exception as e:
-    print('cupy not found, defaulting to numpy. {}'.format(str(e)))
+    print(f'Unable to import cupy, defaulting to numpy. {str(e)}')
     import numpy as np
     from numpy.fft import ifft2, fft2
     using_cupy = False
@@ -18,7 +19,6 @@ import matplotlib.pyplot as plt
 from aotools.turbulence.infinitephasescreen import PhaseScreenKolmogorov
 
 PSK = None
-
 
 def create_circular_mask(h, w, center=None, radius=None):
     # https://stackoverflow.com/questions/44865023/how-can-i-create-a-circular-mask-for-a-numpy-array
@@ -59,44 +59,44 @@ def circular_aperture(img):
 
 
 def atmospheric_distort(img, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor):
-     '''Apply atmospheric distortion to input image
-     Parameters:
-         img (numpy.ndarray): Image to be distorted
-         aperture_size (int): size of capturing aperture in meters
-         fried_param (float): size of atmospheric coherence length (Fried param) in meters
-         outer_scale (int): It's in the AOTools Kolmogorov Phase Screen docs
-         random_seed (int): seed to use to generate Kolmogorov Phase Screen
-         stencil_length_factor (int): How much longer is stencil than desired phase
+    '''Apply atmospheric distortion to input image
+    Parameters:
+        img (numpy.ndarray): Image to be distorted
+        aperture_size (int): size of capturing aperture in meters
+        fried_param (float): size of atmospheric coherence length (Fried param) in meters
+        outer_scale (int): It's in the AOTools Kolmogorov Phase Screen docs
+        random_seed (int): seed to use to generate Kolmogorov Phase Screen
+        stencil_length_factor (int): How much longer is stencil than desired phase
 
-     Returns:
-         numpy.ndarray: numpy array representing the distorted image 
-     '''
-     global PSK
+    Returns:
+        numpy.ndarray: numpy array representing the distorted image
+    '''
+    global PSK
 
-     height, width = img.shape[0], img.shape[1]
-     pxl_scale = aperture_size/height
+    height, width = img.shape[0], img.shape[1]
+    pxl_scale = aperture_size/height
 
-     # error handling
-     if height != width:
-         return "Error! Height does not equal weight!"
+    # error handling
+    if height != width:
+        return "Error! Height does not equal weight!"
 
-     pupil_mask = circular_aperture(img)
-     start = time.time()
-     if not PSK:
-         PSK = PhaseScreenKolmogorov(height, pxl_scale, fried_param, outer_scale, random_seed, stencil_length_factor)
-     for i in range(random.randint(1, 75)):
-         phase_screen = PSK.add_row()
+    pupil_mask = circular_aperture(img)
+    start = time.time()
+    if not PSK:
+        PSK = PhaseScreenKolmogorov(height, pxl_scale, fried_param, outer_scale, random_seed, stencil_length_factor)
+    for i in range(random.randint(1, 75)):
+        phase_screen = PSK.add_row()
     #  print('phase screen generated in {}s'.format(time.time() - start))
-     if using_cupy:
-         phase_screen = np.asarray(phase_screen)
+    if using_cupy:
+        phase_screen = np.asarray(phase_screen)
 
-     a = ifft2(pupil_mask * np.exp(1j * phase_screen))
-     h = abs(abs(a) ** 2)
-     img_slice = ifft2(fft2(h) * fft2(img[:,:,1])).real
+    a = ifft2(pupil_mask * np.exp(1j * phase_screen))
+    h = abs(abs(a) ** 2)
+    img_slice = ifft2(fft2(h) * fft2(img[:,:,1])).real
 
-     img_slice /= np.max(img_slice)
-     img_slice *= 255
-     return np.repeat(img_slice[:,:,np.newaxis], 3, axis=2)
+    img_slice /= np.max(img_slice)
+    img_slice *= 255
+    return np.repeat(img_slice[:,:,np.newaxis], 3, axis=2)
 
 
 def atmospheric_distort_image_file(filepath, output_directory, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor):
@@ -112,8 +112,7 @@ def atmospheric_distort_image_file(filepath, output_directory, aperture_size, fr
 
     filename, ext = os.path.splitext(filepath.name)
     new_filename = make_distorted_image_filename(filename)
-    new_filepath = output_directory/str(filepath).replace(str(filename), new_filename)
-    # print(new_filepath)
+    new_filepath = output_directory/str(filepath.name).replace(str(filename), new_filename)
 
     new_filepath.parents[0].mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(new_filepath), img)
@@ -121,18 +120,25 @@ def atmospheric_distort_image_file(filepath, output_directory, aperture_size, fr
 
 
 # default to Dr0 (aperture_size/fried_param) of 7 (low strength) -- 5 > low, 15 > med, 21 > strong 
-def atmospheric_distort_directory(directory_string, file_glob_matcher, output_directory, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor):
+def atmospheric_distort_directory(directory_string, file_glob_matcher, output_directory, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor, quiet=False):
     directory = pathlib.Path(directory_string)
     output_directory = pathlib.Path(output_directory)
 
+    print(f'Attempting to distort images matching pattern "{file_glob_matcher}" in directory: {str(directory)}. Output directory: {str(output_directory)}')
+
     for path in directory.glob(file_glob_matcher):
-        # print('attempting to distort image at: {}'.format(str(path)))
-        atmospheric_distort_image_file(
+        logging.debug(f'\tdistorting image at: {str(path)}')
+
+        trimmed_path = pathlib.Path(*path.parts[len(directory.parts):]).parent
+        img_path = atmospheric_distort_image_file(
             path,
-            output_directory,
+            output_directory/trimmed_path,
             aperture_size,
             fried_param,
             outer_scale,
             random_seed,
             stencil_length_factor
         )
+        logging.debug(f'\t\timage saved to {img_path}')
+
+    print('Completed applying distortion to images')

@@ -5,8 +5,8 @@ import sys
 
 from generator_scripts.distortion import atmospheric_distort_directory
 
-DEFAULT_APERTURE_SIZE=4
-DEFAULT_FRIED_PARAM=0.8
+DEFAULT_APERTURE_SIZE=8
+DEFAULT_FRIED_PARAM=0.351
 DEFAULT_OUTER_SCALE=100
 DEFAULT_RANDOM_SEED=None
 DEFAULT_STENCIL_LENGTH_FACTOR=32
@@ -39,7 +39,6 @@ if __name__ == '__main__':
             stencil_length_factor=DEFAULT_STENCIL_LENGTH_FACTOR
 
         atmospheric_distort_directory(directory_path, file_glob_matcher, output_directory, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor)
-        print('Completed applying distortion to images')
     except Exception as e:
         print('Failed to apply distortion to images -- {}'.format(str(e)))
         raise e
