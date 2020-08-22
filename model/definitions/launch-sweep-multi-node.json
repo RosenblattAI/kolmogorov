@@ -1,0 +1,98 @@
+{
+    "jobDefinitionName": "launch-sweep-multi-node",
+    "type": "multinode",
+    "containerProperties": {
+        "image": "751398683966.dkr.ecr.us-east-2.amazonaws.com/kolmogorov-model:latest",
+        "vcpus": 1,
+        "memory": 3200,
+        "command": [
+            ""
+        ],
+        "jobRoleArn": "",
+        "mountPoints": [
+            {
+                "containerPath": "",
+                "readOnly": true,
+                "sourceVolume": ""
+            }
+        ],
+        "readonlyRootFilesystem": true,
+        "privileged": true,
+        "user": "",
+        "instanceType": "",
+        "resourceRequirements": [
+            {
+                "value": "1",
+                "type": "GPU"
+            }
+        ],
+        "linuxParameters": {
+            "devices": [
+                {
+                    "hostPath": "",
+                    "containerPath": "",
+                    "permissions": [
+                        "WRITE"
+                    ]
+                }
+            ]
+        }
+    },
+    "nodeProperties": {
+        "numNodes": 1,
+        "mainNode": 0,
+        "nodeRangeProperties": [
+            {
+                "targetNodes": "0:",
+                "container": {
+                    "image": "751398683966.dkr.ecr.us-east-2.amazonaws.com/kolmogorov-model:latest",
+                    "vcpus": 1,
+                    "memory": 3200,
+                    "jobRoleArn": "",
+                    "volumes": [
+                        {
+                            "host": {
+                                "sourcePath": ""
+                            },
+                            "name": ""
+                        }
+                    ],
+                    "mountPoints": [
+                        {
+                            "containerPath": "",
+                            "readOnly": true,
+                            "sourceVolume": ""
+                        }
+                    ],
+                    "readonlyRootFilesystem": true,
+                    "privileged": true,
+                    "user": "",
+                    "instanceType": "",
+                    "resourceRequirements": [
+                        {
+                            "value": "1",
+                            "type": "GPU"
+                        }
+                    ],
+                    "linuxParameters": {
+                        "devices": [
+                            {
+                                "hostPath": "",
+                                "containerPath": "",
+                                "permissions": [
+                                    "MKNOD"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    },
+    "retryStrategy": {
+        "attempts": 1
+    },
+    "timeout": {
+        "attemptDurationSeconds": 60
+    }
+}

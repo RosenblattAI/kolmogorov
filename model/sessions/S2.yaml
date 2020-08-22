@@ -1,0 +1,41 @@
+name: "Kolmogorov Session 2"
+program: model.py
+method: bayes
+metric:
+  name: val_classification_accuracy
+  goal: maximize
+parameters:
+  optimizer:
+    value: "Adam"
+  batch_size:
+    values: [32, 64, 128, 256, 512] 
+  epochs:
+    value: 50
+  activation: 
+    value: "relu"
+  hidden_classification_ly:
+    values: [128, 256, 512, 1024]
+  hidden_orientation_ly: 
+    values: [128, 256, 512, 1024]
+  dropout_classification_ly:
+    values: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+  dropout_orientation_ly:
+    values: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+  orientation:
+    values: [1, 0]
+  classification_weight:
+    min: 0.1
+    max: 1.0
+  orientation_weight:
+    min: 0.1
+    max: 1.0
+  base_output_setting:
+    value: "GlobalAveragePooling2D"
+  imagenet:
+    value: 1
+  dataset_size:
+    value: "large"
+  sample_distortion:
+    value: "generic"
+  model:
+    value: "ResNet50V2"
