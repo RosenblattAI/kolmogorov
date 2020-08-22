@@ -75,6 +75,7 @@ public class Generator : MonoBehaviour
         StartCoroutine(GenerateSatellitesAndTakeImages(resWidth, resHeight, samples));
     }
 
+
     private IEnumerator GenerateSatellitesAndTakeImages(int resWidth, int resHeight, int samples)
     {
 
@@ -112,12 +113,14 @@ public class Generator : MonoBehaviour
         Application.Quit();
     }
 
+
     private void SetupTextures(int width, int height)
     {
         _renderTexture = new RenderTexture(width, height, 24);
         _screenshotTexture = new Texture2D(width, height, TextureFormat.RGB24, false);
         Debug.Log("Observatory setup complete");
     }
+
 
     Bounds CalculateBounds(GameObject obj)
     {
@@ -130,13 +133,14 @@ public class Generator : MonoBehaviour
         return b;
     }
 
+
     void FocusObservatoryOnSatellite(GameObject satellite, float magnification = 1.0f)
     {
         Bounds b = CalculateBounds(satellite);
         Vector3 max = b.size;
         float radius = Mathf.Max(max.x, Mathf.Max(max.y, max.z));
         float dist = radius / (Mathf.Sin(_camera.fieldOfView * Mathf.Deg2Rad / 2f));
-        _camera.transform.position = Random.onUnitSphere * dist / magnification + b.center;
+        _camera.transform.position = new Vector3(0,0,1) * dist / magnification + b.center;
         _camera.transform.LookAt(b.center);
     }
 
@@ -149,20 +153,6 @@ public class Generator : MonoBehaviour
         Debug.Log("Observatory cleanup complete");
     }
 
-    private Vector3 GetSatelliteOrientation(GameObject Satellite)
-    {
-        // get relative orientation of satellite from observatory
-        // Get rotation necessary to orient satellite towards observatory
-        // (if satellite was rotated with the calculated vector, the appearance would depend on neutral orientation of satellite)
-        // incorporate the "up" direction of the observatory
-
-        var direction = _camera.transform.position - Satellite.transform.position;
-        Quaternion quat_rotation = Quaternion.LookRotation(direction, Satellite.transform.up);
-        Vector3 rotation = quat_rotation.eulerAngles;
-        Debug.Log("Relative Obs-Sat angle: " + rotation);
-
-        return rotation;
-    }
 
     private string EulerAngleToString(Vector3 orientation)
     {
@@ -173,46 +163,25 @@ public class Generator : MonoBehaviour
     //IEnumerator
     private IEnumerator GenerateImages(GameObject Satellite, int width, int height, int iterations)
     {
-        float[] XVals = new float[iterations];
-        float[] YVals = new float[iterations];
-        float[] ZVals = new float[iterations];
-
-        float[] CalculatedXVals = new float[iterations];
-        float[] CalculatedYVals = new float[iterations];
-        float[] CalculatedZVals = new float[iterations];
+        // Get initial satellite rotation to reset the orientation when applying a new rotation
+        Quaternion initRotation = Satellite.transform.rotation;
 
         // Local for loop for now, want to distribute and parallelize eventually
         for (int i = 0; i < iterations; i++)
         {
-            // We should only read the screen buffer after rendering is complete
-            // Neccessary for IEnumerator 
-            //yield return new WaitForEndOfFrame();
-
             // NOTE: All of the randoms need to have controlled variance for curriculum learning
 
-            /* Randomly orient the sun
-            GameObject.Find("Sun").transform.Rotate(new Vector3(Random.Range(-360.0f, 360.0f), 
-                                                                Random.Range(-360.0f, 360.0f),
-                                                                Random.Range(-360.0f, 360.0f)));
-            */
-
-            // Why do you rotate it here? lol
             // Randomly orient the satellite
-            XVals[i] = Random.Range(0f, 360f);
-            YVals[i] = Random.Range(0f, 360f);
-            ZVals[i] = Random.Range(0f, 360f);
-            Satellite.transform.Rotate(new Vector3(XVals[i],
-                                                   YVals[i],
-                                                   ZVals[i]));
+            Vector3 toRotate = new Vector3(Random.Range(0f, 360f),
+                                                      Random.Range(0f, 360f),
+                                                      Random.Range(0f, 360f));
+
+            Satellite.transform.rotation = initRotation;
+            Satellite.transform.Rotate(toRotate);
 
             // Focus the camera on the object
             FocusObservatoryOnSatellite(Satellite, Random.Range(0.75f, 2f));
-            Vector3 vector3Orientation = GetSatelliteOrientation(Satellite);
-            string orientation = EulerAngleToString(vector3Orientation);
-
-            CalculatedXVals[i] = vector3Orientation.x;
-            CalculatedYVals[i] = vector3Orientation.y;
-            CalculatedZVals[i] = vector3Orientation.z;
+            string orientation = EulerAngleToString(toRotate);
 
             // Focus the sun on the object
             _sunTransform.rotation = _camera.transform.rotation;
@@ -232,9 +201,6 @@ public class Generator : MonoBehaviour
             // AsyncGPUReadback may be preffered to ReadPixels
             _screenshotTexture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
 
-            // Gets the correct size but unsure about location
-            // Color[] img = ScreenShot.GetPixels(0, 0, resWidth, resHeight);
-
             // Save the screenshot to PNG in the corresponding satellite directory
             byte[] bytes = _screenshotTexture.EncodeToPNG();
             string filename = string.Format(
@@ -247,23 +213,5 @@ public class Generator : MonoBehaviour
             File.WriteAllBytes(filename, bytes);
             yield return null;
         }
-
-        string origpath = "orientation_vals";
-        string calcpath = "extracted_vals";
-
-        StreamWriter writerO = new StreamWriter(origpath);
-        StreamWriter writerE = new StreamWriter(calcpath);
-        writerO.WriteLine("x,y,z");
-        writerE.WriteLine("x,y,z");
-
-        for (int i = 0; i < iterations; i++) {
-            writerO.WriteLine(string.Format("{0},{1},{2}", XVals[i].ToString(), YVals[i].ToString(), ZVals[i].ToString()));
-            writerE.WriteLine(string.Format("{0},{1},{2}", CalculatedXVals[i].ToString(), CalculatedYVals[i].ToString(), CalculatedZVals[i].ToString()));
-        }
-
-        writerE.Flush();
-        writerO.Flush();
-        writerE.Close();
-        writerO.Close();
     }
 }
