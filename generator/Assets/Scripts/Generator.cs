@@ -136,7 +136,7 @@ public class Generator : MonoBehaviour
         Vector3 max = b.size;
         float radius = Mathf.Max(max.x, Mathf.Max(max.y, max.z));
         float dist = radius / (Mathf.Sin(_camera.fieldOfView * Mathf.Deg2Rad / 2f));
-        _camera.transform.position = Random.onUnitSphere * dist / magnification + b.center;
+        _camera.transform.position = new Vector3(0, 0, 1) * dist / magnification + b.center;
         _camera.transform.LookAt(b.center);
     }
 
@@ -159,7 +159,7 @@ public class Generator : MonoBehaviour
         var direction = _camera.transform.position - Satellite.transform.position;
         Quaternion quat_rotation = Quaternion.LookRotation(direction, Satellite.transform.up);
         Vector3 rotation = quat_rotation.eulerAngles;
-        Debug.Log("Relative Obs-Sat angle: " + rotation);
+        // Debug.Log("Relative Obs-Sat angle: " + rotation);
 
         return rotation;
     }
@@ -173,97 +173,59 @@ public class Generator : MonoBehaviour
     //IEnumerator
     private IEnumerator GenerateImages(GameObject Satellite, int width, int height, int iterations)
     {
-        float[] XVals = new float[iterations];
-        float[] YVals = new float[iterations];
-        float[] ZVals = new float[iterations];
-
-        float[] CalculatedXVals = new float[iterations];
-        float[] CalculatedYVals = new float[iterations];
-        float[] CalculatedZVals = new float[iterations];
-
-        // Local for loop for now, want to distribute and parallelize eventually
-        for (int i = 0; i < iterations; i++)
+        int angleStep = 30; // degrees
+        int iteration = 0;
+        Quaternion initRotation = Satellite.transform.rotation;
+        for (int i = 0; i < 360/angleStep; i++)
         {
-            // We should only read the screen buffer after rendering is complete
-            // Neccessary for IEnumerator 
-            //yield return new WaitForEndOfFrame();
+            for (int j = 0; j < 360/angleStep; j++)
+            {
+                for (int k = 0; k < 360/angleStep; k++)
+                {
+                    // Randomly orient the satellite
+                    Debug.Log(string.Format("{0},{1},{2}", i * angleStep, j * angleStep, k * angleStep));
+                    Satellite.transform.rotation = initRotation;
+                    Vector3 toRotate = new Vector3(i * angleStep,
+                                                        j * angleStep,
+                                                        k * angleStep);
+                    Satellite.transform.Rotate(toRotate);
 
-            // NOTE: All of the randoms need to have controlled variance for curriculum learning
+                    // Focus the camera on the object
+                    FocusObservatoryOnSatellite(Satellite, 1f);
+                    string orientation = EulerAngleToString(toRotate);
 
-            /* Randomly orient the sun
-            GameObject.Find("Sun").transform.Rotate(new Vector3(Random.Range(-360.0f, 360.0f), 
-                                                                Random.Range(-360.0f, 360.0f),
-                                                                Random.Range(-360.0f, 360.0f)));
-            */
+                    // Focus the sun on the object
+                    _sunTransform.rotation = _camera.transform.rotation;
 
-            // Why do you rotate it here? lol
-            // Randomly orient the satellite
-            XVals[i] = Random.Range(0f, 360f);
-            YVals[i] = Random.Range(0f, 360f);
-            ZVals[i] = Random.Range(0f, 360f);
-            Satellite.transform.Rotate(new Vector3(XVals[i],
-                                                   YVals[i],
-                                                   ZVals[i]));
+                    float distance = Vector3.Distance(_camera.transform.position, Satellite.transform.position);
 
-            // Focus the camera on the object
-            FocusObservatoryOnSatellite(Satellite, Random.Range(0.75f, 2f));
-            Vector3 vector3Orientation = GetSatelliteOrientation(Satellite);
-            string orientation = EulerAngleToString(vector3Orientation);
+                    // Probably should change this
+                    // get main camera and manually render scene into rt
+                    _camera.targetTexture = _renderTexture;
+                    _camera.Render();
 
-            CalculatedXVals[i] = vector3Orientation.x;
-            CalculatedYVals[i] = vector3Orientation.y;
-            CalculatedZVals[i] = vector3Orientation.z;
+                    // read pixels will read from the currently active render texture so make our offscreen 
+                    // render texture active and then read the pixels
+                    RenderTexture.active = _renderTexture;
 
-            // Focus the sun on the object
-            _sunTransform.rotation = _camera.transform.rotation;
+                    // Take a screenshot in 224x224 resolution
+                    // AsyncGPUReadback may be preffered to ReadPixels
+                    _screenshotTexture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
 
-            float distance = Vector3.Distance(_camera.transform.position, Satellite.transform.position);
-
-            // Probably should change this
-            // get main camera and manually render scene into rt
-            _camera.targetTexture = _renderTexture;
-            _camera.Render();
-
-            // read pixels will read from the currently active render texture so make our offscreen 
-            // render texture active and then read the pixels
-            RenderTexture.active = _renderTexture;
-
-            // Take a screenshot in 224x224 resolution
-            // AsyncGPUReadback may be preffered to ReadPixels
-            _screenshotTexture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-
-            // Gets the correct size but unsure about location
-            // Color[] img = ScreenShot.GetPixels(0, 0, resWidth, resHeight);
-
-            // Save the screenshot to PNG in the corresponding satellite directory
-            byte[] bytes = _screenshotTexture.EncodeToPNG();
-            string filename = string.Format(
-                outputPath + "/{0}_{1}x{2}_{3}_{4}.png",
-                i,
-                width,
-                height,
-                orientation,
-                distance);
-            File.WriteAllBytes(filename, bytes);
-            yield return null;
+                    // Save the screenshot to PNG in the corresponding satellite directory
+                    byte[] bytes = _screenshotTexture.EncodeToPNG();
+                    string filename = string.Format(
+                        outputPath + "/{0}_{1}x{2}_{3}_{4}.png",
+                        iteration,
+                        width,
+                        height,
+                        orientation,
+                        distance);
+                    File.WriteAllBytes(filename, bytes);
+                    iteration++;
+                    yield return null;
+                }
+            }
         }
-
-        string origpath = "orientation_vals";
-        string calcpath = "extracted_vals";
-
-        StreamWriter writerO = new StreamWriter(origpath);
-        StreamWriter writerE = new StreamWriter(calcpath);
-        writerO.WriteLine("x,y,z");
-        writerE.WriteLine("x,y,z");
-
-        for (int i = 0; i < iterations; i++) {
-            writerO.WriteLine(string.Format("{0},{1},{2}", XVals[i].ToString(), YVals[i].ToString(), ZVals[i].ToString()));
-            writerE.WriteLine(string.Format("{0},{1},{2}", CalculatedXVals[i].ToString(), CalculatedYVals[i].ToString(), CalculatedZVals[i].ToString()));
-        }
-
-        writerE.Flush();
-        writerO.Flush();
-        writerE.Close();
-        writerO.Close();
     }
 }
