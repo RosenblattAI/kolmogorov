@@ -8,11 +8,14 @@ DEFAULT_DATASET_DIRECTORY = 'dataset'
 
 def train():
     """Use the wandb configuration to create a model and train it"""
-    # get the configuration settings from wandb
-    config = wandb.config 
+    
+    # lower backpropagation resolution
+    if wandb.config['mixed_precision']:
+        policy = tf.keras.mixed_precision.experimental.Policy('mixed_float16')
+        tf.keras.mixed_precision.experimental.set_policy(policy) 
     
     # get the datasets and relevant variables
-    train_ds, train_steps, val_ds, val_steps, classes = _load_dataset(config)
+    train_ds, val_ds, classes = _load_dataset()
     
     # TODO: be smarter about this
     img_shape = (224,224,3)
@@ -23,14 +26,14 @@ def train():
     with strategy.scope():
         # handle if model is not found
         try:
-            model_cl = getattr(tf.keras.applications, config['model'])
+            model_cl = getattr(tf.keras.applications, wandb.config['model'])
         except AttributeError:
-            raise SyntaxError(f'Model "{config["model"]}" was not found, please adjust your sweep configuration.')
+            raise SyntaxError(f'Model "{wandb.config["model"]}" was not found, please adjust your sweep configuration.')
 
         # get pretrained model with top removed
         model = model_cl(
             include_top=False, 
-            weights='imagenet' if config['imagenet'] else None,
+            weights='imagenet' if wandb.config['imagenet'] else None,
             input_shape=img_shape
         )
 
@@ -40,18 +43,17 @@ def train():
         # build model to config specifications
         model = build_model(
             model, 
-            config, 
             len(classes)
         )
 
         # handle if optimizer is not found
         try:
-            opt = getattr(tf.keras.optimizers, config['optimizer'])()
+            opt = getattr(tf.keras.optimizers, wandb.config['optimizer'])()
         except AttributeError:
-            raise SyntaxError(f'Optimizer "{config["optimizer"]}" was not found, please adjust your sweep configuration.')
+            raise SyntaxError(f'Optimizer "{wandb.config["optimizer"]}" was not found, please adjust your sweep configuration.')
 
         # loss funciton(s)             
-        if config['orientation']:
+        if wandb.config['orientation']:
             loss_fn= {
                 'classification': 'categorical_crossentropy',
                 'orientation': 'mse'
@@ -60,16 +62,16 @@ def train():
             loss_fn = {'classification': 'categorical_crossentropy'}
 
         # loss weight(s)
-        if config['orientation']:
+        if wandb.config['orientation']:
             loss_ws = {
-                'classification': config['classification_weight'], 
-                'orientation': config['orientation_weight']
+                'classification': wandb.config['classification_weight'], 
+                'orientation': wandb.config['orientation_weight']
             } 
         else:
             loss_ws = None
 
         # metric name
-        if config['orientation']:
+        if wandb.config['orientation']:
             mets = {'classification': 'accuracy'}
         else:
             mets = [
@@ -86,8 +88,8 @@ def train():
         )
 
         # wandb sample logging
-        tr_batch = next(train_ds)
-        if config['orientation']:
+        tr_batch = next(iter(train_ds))
+        if wandb.config['orientation']:
             tr_image_batch, (tr_label_batch, tr_orientation_batch) = tr_batch
             #tr_orientation_batch = cylcial2degrees(tr_orientation_batch.numpy())
             tr_orientation_batch = tr_orientation_batch.numpy()
@@ -103,6 +105,7 @@ def train():
             save_weights_only=True,
         )
         
+        """
         # setup model checkpointing
         checkpoint_filepath = os.path.join(wandb.run.dir, "checkpoint/best_model")
         checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
@@ -113,6 +116,7 @@ def train():
             save_weights_only=True,
             mode='max'
         )
+        """
 
         # validation loss early stop callback
         earlystop = tf.keras.callbacks.EarlyStopping(
@@ -124,21 +128,21 @@ def train():
         # perfom training
         model.fit( 
             train_ds,
-            steps_per_epoch=train_steps, 
             validation_data=val_ds,
-            validation_steps=val_steps,
-            epochs=config['epochs'], 
+            epochs=wandb.config['epochs'], 
             callbacks=[
                 earlystop, 
-                checkpoint_callback,
                 wandb_logging,
             ]
         )
         
+        
+        """
         # TODO: remove translation layer
         model.load_weights(checkpoint_filepath)
         print('Calculating Confusion Matrix and AUC-ROC Curve using best weigths')
         calculate_metrics(val_ds, val_steps, classes, model)
+        """
         
 """
 def cylcial2degrees(data):
@@ -153,9 +157,9 @@ def cylcial2degrees(data):
     return np.degrees(np.array(axs).T)
 """ 
     
-    
+"""
 def calculate_metrics(gen, steps, classes, model):
-    """Logs a confussion matrix and ROC curves for 'step' number of batches from a dataset generator"""
+    #Logs a confussion matrix and ROC curves for 'step' number of batches from a dataset generator
     labels = []
     preds = []
     if wandb.config['orientation']:
@@ -183,7 +187,7 @@ def calculate_metrics(gen, steps, classes, model):
     if wandb.config['orientation']:
          # TODO: support orientation
         pass
-
+"""
 
 def log_batch(image_batch, label_batch, classes, orientation_batch=None):
     """Logs 16 labeled samples to Wandb"""
@@ -219,104 +223,99 @@ def add_preprocessing(base_model):
     return model
 
 
-def build_model(base_model, config, num_classes):
+def build_model(base_model, num_classes):
     """"Takes model body and intializes head with Wandb.config hyperparameters"""
     output_lys = []
 
     x = base_model.output
 
     try:
-        base_out_ly = getattr(tf.keras.layers, config['base_output_setting'])
+        base_out_ly = getattr(tf.keras.layers, wandb.config['base_output_setting'])
     except AttributeError:
-        raise SyntaxError(f'Layer "{config["base_output_setting"]}" was not found, please adjust your sweep configuration.')
+        raise SyntaxError(f'Layer "{wandb.config["base_output_setting"]}" was not found, please adjust your sweep configuration.')
             
     # TODO: add check for activation_fn
     try:
-        activation_fn = getattr(tf.keras.activations, config['activation'])
+        activation_fn = getattr(tf.keras.activations, wandb.config['activation'])
     except AttributeError:
-        raise SyntaxError(f'Activation function "{config["base_output_setting"]}" was not found, please adjust your sweep configuration.')
+        raise SyntaxError(f'Activation function "{wandb.config["base_output_setting"]}" was not found, please adjust your sweep configuration.')
 
     x = base_out_ly()(x)
-    c = tf.keras.layers.Dense(config['hidden_classification_ly'], activation=config['activation'])(x) 
-    c = tf.keras.layers.Dropout(config['dropout_classification_ly'])(c)
+    c = tf.keras.layers.Dense(wandb.config['hidden_classification_ly'], activation=wandb.config['activation'])(x) 
+    c = tf.keras.layers.Dropout(wandb.config['dropout_classification_ly'])(c)
     classification = tf.keras.layers.Dense(num_classes, activation='softmax', name='classification')(c)
     output_lys.append(classification)
     
-    if config['orientation']:
-        o = tf.keras.layers.Dense(config['hidden_orientation_ly'], activation=config['activation'])(x) 
-        o = tf.keras.layers.Dropout(config['dropout_orientation_ly'])(o)
+    if wandb.config['orientation']:
+        o = tf.keras.layers.Dense(wandb.config['hidden_orientation_ly'], activation=wandb.config['activation'])(x) 
+        o = tf.keras.layers.Dropout(wandb.config['dropout_orientation_ly'])(o)
         orientation = tf.keras.layers.Dense(6, activation='sigmoid', name='orientation')(o)
         output_lys.append(orientation)
         
     return tf.keras.Model(inputs=base_model.input, outputs=output_lys)
 
 
-def _extract_orientation(filename):
-    o_string = filename.split('_')[2]
-    return [float(val) for val in o_string.split(',')]
+def path2label(path, labels):
+    label = tf.strings.split(path, os.path.sep)[-2].numpy()
+    labels = labels.numpy()
+    return labels == label
 
 
-def dataset_generator(folder, classes, batch=16, shuffle=True, multitask=False):
-    """Generates dataset batches"""
-    file_gen = os.walk(folder)
-    _ = next(file_gen)[1]
-    one_hot_encoder = dict(zip(classes, np.eye(len(classes))))
-    if multitask:
-        dataset = [[f'{class_[0]}/{filename}', _extract_orientation(filename), one_hot_encoder[class_[0].split('/')[-1]]] for class_ in file_gen for filename in class_[2]]
-    else:
-        dataset = [[f'{class_[0]}/{filename}', one_hot_encoder[class_[0].split('/')[-1]]] for class_ in file_gen for filename in class_[2]]
-
-    i = 0
-
-    while True:   
-        if shuffle and i == 0:
-            np.random.shuffle(dataset)
-
-        if multitask:
-            orients = []
-
-        images, one_hots = [], []
-
-        try:
-            for sample in range(batch):
-                if multitask:
-                    path, orient, one_hot = dataset[i*batch + sample]
-                else:
-                    path, one_hot = dataset[i*batch + sample]
-                    
-                with open(path, 'rb') as img:
-                    f = img.read()
-                    b_img = bytes(f)
-                
-                img = tf.io.decode_image(b_img)
-                img = tf.image.convert_image_dtype(img, tf.float32)
-                images.append(img)
-                
-                if multitask:
-                    orient = tf.convert_to_tensor(_extract_orientation(path))
-                    orient = np.deg2rad(orient)
-                    orient = tf.concat([tf.math.sin(orient), tf.math.cos(orient)], 0)
-                    orients.append(orient)
-
-                one_hot = tf.convert_to_tensor(one_hot)
-                one_hots.append(one_hot)
-
-                i += 1
-        except IndexError:
-            i = 0
-            continue
-
-        if multitask:
-            yield tf.convert_to_tensor(images), [tf.convert_to_tensor(one_hots), tf.convert_to_tensor(orients)]
-        else:
-            yield tf.convert_to_tensor(images), tf.convert_to_tensor(one_hots)
+def path2img(path):
+    img = tf.io.read_file(path)
+    img = tf.io.decode_image(img)
+    img = tf.image.convert_image_dtype(img, tf.float32)
+    return img
 
 
-def _corruption_test(classes):
+def path2orientation(path):
+    orientation_str = tf.strings.split(path, '_')[-7]
+    orientation = tf.strings.to_number(tf.strings.split(orientation_str, ','))
+    orientation = np.deg2rad(orientation)
+    orientation = tf.concat([tf.math.sin(orientation), tf.math.cos(orientation)], 0)
+    return orientation
+
+
+def get_dataset(directory):
+    labels = sorted(os.listdir(directory))
+    files_ds = tf.data.Dataset.list_files(os.path.join(directory,'*/*.png'))
+    
+    if wandb.config['orientation']:
+        orientation_ds = files_ds.map(
+            lambda path: tf.py_function(
+                path2orientation, [path], [tf.float32]
+            ),
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
+
+    img_ds = files_ds.map(
+        lambda path: tf.py_function(
+            path2img, [path], [tf.float32]
+        ),
+        num_parallel_calls=tf.data.experimental.AUTOTUNE
+    )
+
+    labels_ds = files_ds.map(
+        lambda path: tf.py_function(
+            path2label, [path, labels], [tf.float32]
+        ),
+        num_parallel_calls=tf.data.experimental.AUTOTUNE
+    )
+
+    outputs_ds = tf.data.Dataset.zip((labels_ds, orientation_ds)) if wandb.config['orientation'] else labels_ds
+    ds = tf.data.Dataset.zip((img_ds, outputs_ds))
+    ds = ds.cache()
+    ds = ds.shuffle(files_ds.cardinality().numpy(), reshuffle_each_iteration=True)
+    ds = ds.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    ds = ds.batch(get_batch_size())
+    return ds
+
+
+def _corruption_test():
     path = DEFAULT_DATASET_DIRECTORY
     print('model.py: testing for corrupt classes...')
     passed = True
-    for c in classes:
+    for c in sorted(os.listdir(directory)):
         rem_id = lambda x: x[x.index('_')+1:]
         tr_fnames = set(map(rem_id, next(os.walk(f'{path}/training/{c}'))[2]))
         val_fnames = set(map(rem_id, next(os.walk(f'{path}/validation/{c}'))[2]))
@@ -331,52 +330,58 @@ def _corruption_test(classes):
     return passed
 
 
-def _load_dataset(config):
-    path = DEFAULT_DATASET_DIRECTORY
+def get_batch_size():
     num_gpus = len(tf.config.experimental.list_physical_devices('GPU'))
-    batch = config['batch_size'] * num_gpus if num_gpus else config['batch_size']
+     wandb.run.summary['num_gpus'] = num_gpus
+    batch_size = wandb.config['batch_size'] * num_gpus if num_gpus else wandb.config['batch_size']
+    print(f'model.py: batch size: {batch_size}')
+    
     if num_gpus > 1:
-        print(f'model.py: using batch sizes of {batch} equally distributed on {num_gpus} GPUs...')
+        print(f'model.py: using batch sizes of {batch_size} equally distributed on {batch_size} GPUs. Updating wandb.summary...')
+        wandb.run.summary['distributed_batch_size'] = batch_size
     else:
-        print(f'model.py: using batch sizes of {batch} on a single GPU...')
+        print(f'model.py: using batch sizes of {batch_size} on a single GPU...')
+    return batch_size
 
-    classes = sorted(next(os.walk(f'{path}/training'))[1])
+
+def _load_datasets():
+    path = DEFAULT_DATASET_DIRECTORY
+    
+    if sorted(os.listdir(f'{path}/training')) != sorted(os.listdir(f'{path}/validation')):
+        # TODO: Replace with custom error
+        raise RuntimeError('Training and validation folder do not contain the same classes. Please update the dataset.')
+    else:
+        classes = sorted(os.listdir(f'{path}/validation'))
 
     if not _corruption_test(classes):
         # TODO: Replace with custom error
-        raise RuntimeError('Validation dataset contamination detected. Please update the dataset.')
-    try:
-        num_train = sum([len(next(os.walk(f'{path}/training/{c}'))[2]) for c in classes])
-        num_val = sum([len(next(os.walk(f'{path}/validation/{c}'))[2]) for c in classes])
-    except Exception as e:
-        print(f'model.py: There was an exception getting the number of training and validation samples (are they all downloaded?): {str(e)}')
+        raise RuntimeError('Validation folder contamination detected. Please update the dataset.')
 
-    train_steps = int(np.ceil(num_train/batch))
-    val_steps = int(np.ceil(num_val/batch))
-    train_ds = dataset_generator(f'{path}/training', classes, batch=batch, multitask=config['orientation'])
-    val_ds = dataset_generator(f'{path}/validation', classes, batch=batch, multitask=config['orientation'])
-    return train_ds, train_steps, val_ds, val_steps, classes
+    train_ds = get_dataset(f'{path}/training')
+    val_ds = get_dataset(f'{path}/validation')
+    return train_ds, val_ds, classes
 
 
 if __name__=='__main__':
-    gpus = len(tf.config.experimental.list_physical_devices('GPU'))
 
     # TODO(developer): load the config from the best model from s3
+    # TODO: adjust batch size to the size of the GPU
     config_defaults = {
         'optimizer' : 'Adam',
-        'batch_size' : 64 if gpus else 16,
+        'batch_size' : 96 if len(tf.config.experimental.list_physical_devices('GPU')) else 16,
         'epochs' : 10,
         'activation' : 'relu',
-        'hidden_classification_ly' : 256,
-        'hidden_orientation_ly' : 256,
+        'hidden_classification_ly' : 1000,
+        'hidden_orientation_ly' : 1000,
         'dropout_classification_ly' : 0.3,
         'dropout_orientation_ly' : 0.5,
-        'orientation' : 0,
+        'orientation' : 1,
         'classification_weight': 1.0,
         'orientation_weight': 1.0,
         'model': 'ResNet50V2',
         'base_output_setting': 'GlobalAveragePooling2D',
         'imagenet': 1
+        'mixed_precision': 0,
     }
 
     wandb.init(config=config_defaults)

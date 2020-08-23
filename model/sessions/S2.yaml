@@ -8,7 +8,7 @@ parameters:
   optimizer:
     value: "Adam"
   batch_size:
-    values: [32, 64, 128, 256, 512] 
+    values: [64, 96] 
   epochs:
     value: 50
   activation: 
@@ -39,3 +39,5 @@ parameters:
     value: "generic"
   model:
     value: "ResNet50V2"
+  mixed_precision:
+    values: [1, 0]
