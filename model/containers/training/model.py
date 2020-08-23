@@ -128,20 +128,17 @@ def train():
             validation_data=val_ds,
             validation_steps=val_steps,
             epochs=config['epochs'], 
-            callbacks=[earlystop, 
-                       checkpoint_callback,
-                       wandb_logging,
-                      ]
+            callbacks=[
+                earlystop, 
+                checkpoint_callback,
+                wandb_logging,
+            ]
         )
         
         # TODO: remove translation layer
-        print('calculating conf matrix with latest')
+        model.load_weights(checkpoint_filepath)
+        print('Calculating Confusion Matrix and AUC-ROC Curve using best weigths')
         calculate_metrics(val_ds, val_steps, classes, model)
-        model.load_weights("checkpoint/best_model")
-        print('calculating conf matrix with best')
-        calculate_metrics(val_ds, val_steps, classes, model)
-        model.save('full.h5')
-        wandb.save('full.h5')
         
 """
 def cylcial2degrees(data):
@@ -155,6 +152,7 @@ def cylcial2degrees(data):
         axs.append(ax)
     return np.degrees(np.array(axs).T)
 """ 
+    
     
 def calculate_metrics(gen, steps, classes, model):
     """Logs a confussion matrix and ROC curves for 'step' number of batches from a dataset generator"""
@@ -173,14 +171,14 @@ def calculate_metrics(gen, steps, classes, model):
         else:
             image_batch, label_batch = batch
             pred_batch = model.predict(image_batch)
-            preds.append(np.argmax(pred_batch, axis=1))
+            preds.append(pred_batch)
         labels.append(np.argmax(label_batch.numpy(), axis=1))
         
     y_true = np.array(labels).flatten()
-    y_pred = np.array(preds).flatten()
     y_prob = np.concatenate(preds)
-    wandb.sklearn.plot_confusion_matrix(y_true, y_pred, labels=classes) # 18 index issue
-    wandb.log({'roc': wandb.plots.ROC(y_true, y_prob)}, labels=classes)
+    y_pred = np.argmax(y_prob, axis=1).flatten()
+    wandb.sklearn.plot_confusion_matrix(y_true, y_pred, labels=classes)
+    wandb.log({'roc': wandb.plots.ROC(y_true, y_prob)}, classes)
    
     if wandb.config['orientation']:
          # TODO: support orientation
@@ -367,7 +365,7 @@ if __name__=='__main__':
     config_defaults = {
         'optimizer' : 'Adam',
         'batch_size' : 64 if gpus else 16,
-        'epochs' : 2,
+        'epochs' : 10,
         'activation' : 'relu',
         'hidden_classification_ly' : 256,
         'hidden_orientation_ly' : 256,

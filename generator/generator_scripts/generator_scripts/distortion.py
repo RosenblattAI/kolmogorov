@@ -6,15 +6,15 @@ import os
 import pathlib
 import random
 import time
-try:
-    import cupy as np
-    from cupy.fft import ifft2, fft2
-    using_cupy = True
-except Exception as e:
-    print(f'Unable to import cupy, defaulting to numpy. {str(e)}')
-    import numpy as np
-    from numpy.fft import ifft2, fft2
-    using_cupy = False
+# try:
+#     import cupy as np
+#     from cupy.fft import ifft2, fft2
+#     using_cupy = True
+# except Exception as e:
+# print(f'Unable to import cupy, defaulting to numpy. {str(e)}')
+import numpy as np
+from numpy.fft import ifft2, fft2
+using_cupy = False
 import matplotlib.pyplot as plt
 from aotools.turbulence.infinitephasescreen import PhaseScreenKolmogorov
 

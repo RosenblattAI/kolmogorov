@@ -65,7 +65,6 @@ class DatasetGenerator(object):
                 for sample in range(self.batch):
                     
                     path, one_hot = dataset[i*self.batch + sample]
-                    print(path, np.argmax(one_hot,0))
                     with open(path, 'rb') as img:
                         f = img.read()
                         b_img = bytes(f)
