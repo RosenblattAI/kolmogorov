@@ -9,19 +9,25 @@ DEFAULT_DATASET_DIRECTORY = 'dataset'
 def train():
     """Use the wandb configuration to create a model and train it"""
     
+    # Setup a remote TPU cluster for training 
+    if wandb.config['hardware'] == 'TPU':
+        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='grpc://' + wandb.config['tpu_addr'])
+        tf.config.experimental_connect_to_cluster(resolver)
+        tf.tpu.experimental.initialize_tpu_system(resolver)
+    
     # lower backpropagation resolution
     if wandb.config['mixed_precision']:
         policy = tf.keras.mixed_precision.experimental.Policy('mixed_float16')
         tf.keras.mixed_precision.experimental.set_policy(policy) 
     
     # get the datasets and relevant variables
-    train_ds, val_ds, classes = _load_dataset()
+    train_ds, val_ds, classes = _load_datasets()
     
     # TODO: be smarter about this
     img_shape = (224,224,3)
     
     # Setup a multi-gpu distributed batch training strategy
-    strategy = tf.distribute.MirroredStrategy()
+    strategy = tf.distribute.TPUStrategy(resolver) if wandb.config['hardware'] == 'TPU' else tf.distribute.MirroredStrategy()
     
     with strategy.scope():
         # handle if model is not found
@@ -105,19 +111,6 @@ def train():
             save_weights_only=True,
         )
         
-        """
-        # setup model checkpointing
-        checkpoint_filepath = os.path.join(wandb.run.dir, "checkpoint/best_model")
-        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            checkpoint_filepath,
-            monitor='val_classification_accuracy',
-            verbose=1, 
-            save_best_only=True,
-            save_weights_only=True,
-            mode='max'
-        )
-        """
-
         # validation loss early stop callback
         earlystop = tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
@@ -136,58 +129,6 @@ def train():
             ]
         )
         
-        
-        """
-        # TODO: remove translation layer
-        model.load_weights(checkpoint_filepath)
-        print('Calculating Confusion Matrix and AUC-ROC Curve using best weigths')
-        calculate_metrics(val_ds, val_steps, classes, model)
-        """
-        
-"""
-def cylcial2degrees(data):
-    #Converts cyclical sin and cos pairs to degrees (reverse unit circle)
-    axs = []
-    num_features = data.shape[1]//2
-    for axis in range(num_features):
-        ax_sin = data[:,axis]
-        ax_cos = data[:,axis+num_features]
-        ax = np.arctan(np.divide(ax_sin, ax_cos))
-        axs.append(ax)
-    return np.degrees(np.array(axs).T)
-""" 
-    
-"""
-def calculate_metrics(gen, steps, classes, model):
-    #Logs a confussion matrix and ROC curves for 'step' number of batches from a dataset generator
-    labels = []
-    preds = []
-    if wandb.config['orientation']:
-        orients = []
-    
-    for _ in range(steps):
-        batch = next(gen)
-        if wandb.config['orientation']:
-            image_batch, (label_batch, orientation_batch) = batch
-            class_batch, orient_batch = model.predict(image_batch)
-            preds.append(np.argmax(class_batch, axis=1))
-            orients.append(orient_batch)
-        else:
-            image_batch, label_batch = batch
-            pred_batch = model.predict(image_batch)
-            preds.append(pred_batch)
-        labels.append(np.argmax(label_batch.numpy(), axis=1))
-        
-    y_true = np.array(labels).flatten()
-    y_prob = np.concatenate(preds)
-    y_pred = np.argmax(y_prob, axis=1).flatten()
-    wandb.sklearn.plot_confusion_matrix(y_true, y_pred, labels=classes)
-    wandb.log({'roc': wandb.plots.ROC(y_true, y_prob)}, classes)
-   
-    if wandb.config['orientation']:
-         # TODO: support orientation
-        pass
-"""
 
 def log_batch(image_batch, label_batch, classes, orientation_batch=None):
     """Logs 16 labeled samples to Wandb"""
@@ -331,13 +272,13 @@ def _corruption_test():
 
 
 def get_batch_size():
-    num_gpus = len(tf.config.experimental.list_physical_devices('GPU'))
-     wandb.run.summary['num_gpus'] = num_gpus
-    batch_size = wandb.config['batch_size'] * num_gpus if num_gpus else wandb.config['batch_size']
+    num_dev = len(tf.config.list_physical_devices(wandb.config['hardware']))
+    wandb.run.summary['num_devices'] = num_devices
+    batch_size = wandb.config['batch_size'] * num_dev if num_dev else wandb.config['batch_size']
     print(f'model.py: batch size: {batch_size}')
     
     if num_gpus > 1:
-        print(f'model.py: using batch sizes of {batch_size} equally distributed on {batch_size} GPUs. Updating wandb.summary...')
+        print(f'model.py: using batch sizes of {batch_size} equally distributed on {batch_size} {wandb.config['hardware']}s. Updating wandb.summary...')
         wandb.run.summary['distributed_batch_size'] = batch_size
     else:
         print(f'model.py: using batch sizes of {batch_size} on a single GPU...')
@@ -365,10 +306,11 @@ def _load_datasets():
 if __name__=='__main__':
 
     # TODO(developer): load the config from the best model from s3
-    # TODO: adjust batch size to the size of the GPU
+    # TODO: adjust batch size to the size of the GPU/TPU
+    
     config_defaults = {
         'optimizer' : 'Adam',
-        'batch_size' : 96 if len(tf.config.experimental.list_physical_devices('GPU')) else 16,
+        'batch_size' : 8 if len(tf.config.list_physical_devices('TPU')) else 96,
         'epochs' : 10,
         'activation' : 'relu',
         'hidden_classification_ly' : 1000,
@@ -380,8 +322,10 @@ if __name__=='__main__':
         'orientation_weight': 1.0,
         'model': 'ResNet50V2',
         'base_output_setting': 'GlobalAveragePooling2D',
-        'imagenet': 1
+        'imagenet': 1,
         'mixed_precision': 0,
+        'hardware': 'TPU'
+        'tpu_addr': '...'
     }
 
     wandb.init(config=config_defaults)
