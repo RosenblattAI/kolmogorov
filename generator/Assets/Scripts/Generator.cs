@@ -182,6 +182,7 @@ public class Generator : MonoBehaviour
             // Focus the camera on the object
             FocusObservatoryOnSatellite(Satellite, Random.Range(0.75f, 2f));
             string orientation = EulerAngleToString(toRotate);
+            Debug.Log(string.Format("Relative Sat ({0}) angle: {1}", Satellite.name , orientation));
 
             // Focus the sun on the object
             _sunTransform.rotation = _camera.transform.rotation;
