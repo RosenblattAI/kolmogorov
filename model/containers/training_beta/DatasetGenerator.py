@@ -1,16 +1,18 @@
 import os
 import numpy as np
 import tensorflow as tf
+from pathlib import Path
 
 class DatasetGenerator(object):
     
-    def __init__(self, path, multitask=False, distortion=False, evaluate=False, batch=16, shuffle=True):
+    def __init__(self, path, multitask=False, distortion=False, distance=False, evaluate=False, batch=16, shuffle=True):
         self.batch = batch
         self.shuffle = shuffle
         self.evaluate = evaluate
         self.multitask = multitask
         self.distortion = distortion
-        self.path = f'{os.getcwd()}/{path}'
+        self.distance = distance
+        self.path = Path(path).resolve()
         self.classes = sorted(next(os.walk(self.path))[1])
         
         try:
@@ -24,7 +26,7 @@ class DatasetGenerator(object):
     
     def _extract_orientation(self, filename):
         """Extracts the x,y,z floating point orientation values from a filename"""
-        o_string = filename.split('_')[2]
+        o_string = Path(filename).name.split('_')[2]
         return [float(val) for val in o_string.split(',')]
     
     
@@ -37,6 +39,13 @@ class DatasetGenerator(object):
             return D/r0
         except ValueError:
             return 0.0
+
+
+    def _extract_distance(sef, filename):
+        """Extacts the Unity Distance value from a filename"""
+        idx = filename.rindex(".",0,-4)
+        distance_str = filename[:idx].split('_')[3]
+        return float(distance_str)
     
     
     def __iter__(self):
@@ -44,7 +53,18 @@ class DatasetGenerator(object):
         file_gen = os.walk(self.path)
         _ = next(file_gen)[1]
         one_hot_encoder = dict(zip(self.classes, np.eye(len(self.classes))))
-        dataset = [[f'{class_[0]}/{filename}', one_hot_encoder[class_[0].split('/')[-1]]] for class_ in file_gen for filename in class_[2]]
+        dataset = []
+        for class_ in file_gen:
+            for filename in class_[2]:
+                try:
+                    dataset.append([
+                            f'{class_[0]}/{filename}',
+                            one_hot_encoder[class_[0].split('/')[-1]]
+                        ]
+                    )
+                except:
+                    print(f'failed to parse {class_}')
+#         dataset = [[f'{class_[0]}/{filename}', one_hot_encoder[class_[0].split('/')[-1]]] for class_ in file_gen for filename in class_[2]]
 
         i = 0
 
@@ -59,13 +79,15 @@ class DatasetGenerator(object):
             if self.distortion:
                 distorts = []
 
+            if self.distance:
+                distances = []
+
             images, one_hots = [], []
 
             try:
                 for sample in range(self.batch):
                     
                     path, one_hot = dataset[i*self.batch + sample]
-                    print(path, np.argmax(one_hot,0))
                     with open(path, 'rb') as img:
                         f = img.read()
                         b_img = bytes(f)
@@ -90,6 +112,11 @@ class DatasetGenerator(object):
                         distort = tf.convert_to_tensor(self._extract_distortion(path))
                         distorts.append(distort)
 
+                    if self.distance:
+                        distance = tf.convert_to_tensor(self._extract_distance(path))
+                        distances.append(distance)
+
+
                     i += 1
             except IndexError:
                 i = 0
@@ -102,5 +129,7 @@ class DatasetGenerator(object):
                 outputs.append(tf.convert_to_tensor(orients))
             if self.distortion:
                 outputs.append(tf.convert_to_tensor(distorts))
+            if self.distance:
+                outputs.append(tf.convert_to_tensor(distances))
             
             yield inputs, outputs
