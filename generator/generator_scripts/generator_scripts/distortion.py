@@ -74,7 +74,7 @@ def atmospheric_distort(img, aperture_size, fried_param, outer_scale, random_see
      global PSK
 
      height, width = img.shape[0], img.shape[1]
-     pxl_scale = aperture_size/height
+     pxl_scale = aperture_size/height*2
 
      # error handling
      if height != width:
@@ -112,7 +112,7 @@ def atmospheric_distort_image_file(filepath, output_directory, aperture_size, fr
 
     filename, ext = os.path.splitext(filepath.name)
     new_filename = make_distorted_image_filename(filename)
-    new_filepath = output_directory/str(filepath).replace(str(filename), new_filename)
+    new_filepath = output_directory/str(filepath.name).replace(str(filename), new_filename)
     # print(new_filepath)
 
     new_filepath.parents[0].mkdir(parents=True, exist_ok=True)
@@ -127,9 +127,10 @@ def atmospheric_distort_directory(directory_string, file_glob_matcher, output_di
 
     for path in directory.glob(file_glob_matcher):
         # print('attempting to distort image at: {}'.format(str(path)))
+        trimmed_path = pathlib.Path(*path.parts[len(directory.parts):]).parent
         atmospheric_distort_image_file(
             path,
-            output_directory,
+            output_directory/trimmed_path,
             aperture_size,
             fried_param,
             outer_scale,
