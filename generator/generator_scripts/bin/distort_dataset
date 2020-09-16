@@ -10,23 +10,23 @@ from generator_scripts.distortion import apply_atmospheric_distortion
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Apply atmospheric distortion to images.')
 
-    parser.add_argument('source_directory', required=True,
+    parser.add_argument('source_directory',
                         help='absolute or relative path to directory containing images')
-    parser.add_argument('output_directory', required=True,
+    parser.add_argument('output_directory',
                         help='absolute or relative path to where distorted images will be saved')
     parser.add_argument('--side-length', '-l', type=int, required=True,
                         help='the number of pixels along one side of the (square) images')
     parser.add_argument('--aperture-size', '-a', type=float, required=True,
                         help='size of the telescope aperture in meters (8 is a good value)')
-    parser.add_argument('--outer-scale', '-x', type=int, required=True,
-                        help='outer scale in meters used to generate Kolmogorov phase screen (AOTools library)')
     parser.add_argument('--fried-param', '-f', type=float,
                         help='Fried param in meters used to generate Kolmogorov phase screen (AOTools library)')
+    parser.add_argument('--outer-scale', '-x', type=float,
+                        help='outer scale in meters used to generate Kolmogorov phase screen (AOTools library)')
     parser.add_argument('--stencil-length-factor', '-s', type=int,
                         help='stencil length factor used to generate Kolmogorov phase screen (AOTools library), defaults to 4')
     parser.add_argument('--random-seed', '-r', type=int,
                         help='integer value to control randomness')
-    parser.add_argument('--interval', '-i', action='extend', nargs=2, type=int,
+    parser.add_argument('--interval', '-i', nargs=2, type=int,
                         help="optional parameter to define a range of D/r0 values for a set of Kolmogorov phase screens randomly applied to each image. Expects two integer values, and is inclusive. Do not provide a value for 'Fried param' if 'interval' is used.")
     parser.add_argument('--mean', '-u',type=float,
                         help="optional parameter used with 'interval' to control a normal distribution pdf associated with the range of D/r0 values in the defined interval. Should be a value in the interval range. If not provided, pdf will be a uniform distribution.")
@@ -51,4 +51,5 @@ if __name__ == '__main__':
         print('Completed applying distortion to images')
     except Exception as e:
         print('Failed to apply distortion to images -- {}'.format(str(e)))
+        raise e
         sys.exit(1)

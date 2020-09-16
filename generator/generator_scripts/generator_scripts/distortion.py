@@ -16,11 +16,13 @@ except Exception as e:
 import matplotlib.pyplot as plt
 from aotools.turbulence.infinitephasescreen import PhaseScreenKolmogorov
 from scipy.stats import norm
+from typing import List
 
 
-class PhaseScreen:
-    '''Wraps Kolmogorov phase screen and exposes values of interest
-    '''
+class PhaseScreen(PhaseScreenKolmogorov):
+    """Wraps Kolmogorov phase screen and exposes values of interest
+    """
+
     def __init__(self, height: int, aperture_size: float, fried_param: float, outer_scale: int, random_seed: int, stencil_length_factor: int):
         self.height = height
         self.aperture_size = aperture_size
@@ -30,7 +32,7 @@ class PhaseScreen:
         self.random_seed = random_seed
         self.stencil_length_factor = stencil_length_factor
 
-        self.phase_screen = PhaseScreenKolmogorov(
+        super().__init__(
             self.height,
             self.pxl_scale,
             self.fried_param,
@@ -39,23 +41,51 @@ class PhaseScreen:
             self.stencil_length_factor
         )
 
-    def __getattribute__(self, name: str):
-        return getattr(self.phase_screen, name)
+    def __update_screen(self):
+        for i in range(random.randint(1, self.height)):
+            self.add_row()
+
+    def __mul__(self, other):
+        self.__update_screen()
+        return self.scrn * other
+
+    def __rmul__(self, other):
+        self.__update_screen()
+        return other * self.scrn
+
+    def __getattr__(self, name):
+        return getattr(self.scrn, name)
 
 
 class PhaseScreenContainer:
-    '''Contains the set of phasescreens queried by DistortionController
-    '''
+    """Contains the set of phasescreens queried by DistortionController
+    """
     def __init__(self,
                  size: int,
                  aperture_size: float,
                  fried_param: float=None,
                  outer_scale: int=None,
-                 stencil_length_factor: int=4,
+                 stencil_length_factor: int=None,
                  random_seed: float=None,
                  interval: List[int]=None,
                  mean: float=None,
-                 std: float=1.0):
+                 std: float=None):
+        assert size is not None, 'pixel length of image side must be provided'
+        assert aperture_size is not None, 'aperture size must be provided'
+
+        if interval is not None:
+            assert len(interval) == 2 and \
+                    isinstance(interval[0], int) and \
+                    isinstance(interval[1], int), \
+                    'Interval argument must be a list of 2 integers'
+            assert fried_param is None, 'Interval argument is provided a value, fried-param must be None'
+        else:
+            assert fried_param is not None, 'Interval argument is None, both aperture-size and fried-param must have a value'
+
+        outer_scale = outer_scale or 100
+        stencil_length_factor = stencil_length_factor or 4
+        std = std or 1.0
+
         self.phase_screens = self.__generate_phase_screens(
             size=size,
             aperture_size=aperture_size,
@@ -74,25 +104,22 @@ class PhaseScreenContainer:
             self,
             size: int,
             aperture_size: float,
-            fried_param: float=None,
-            outer_scale: int=None,
-            stencil_length_factor: int=4,
-            random_seed: float=None,
-            interval: List[int]=None) -> List[PhaseScreen]:
-        assert aperture_size is not None, 'aperture_size argument must be provided a value'
-        assert outer_scale is not None, 'You must provide a value for outer_scale'
-
-        if interval is not None:
-            assert len(interval) == 2 and \
-                    isinstance(interval[0], int) and \
-                    isinstance(interval[1], int), \
-                    'Interval argument must be a list of 2 integers'
-            assert fried_param is None, 'Interval argument is provided a value, fried_param must be None'
-        else:
-            assert fried_param is not None, 'Interval argument is None, both aperture_size and fried_param must have a value'
-
+            fried_param: float,
+            outer_scale: int,
+            stencil_length_factor: int,
+            random_seed: float,
+            interval: List[int]) -> List[PhaseScreen]:
         if not interval:
-            return [PhaseScreen(size, aperture_size, fried_param, outer_scale, stencil_length_factor, random_seed)]
+            return [
+                PhaseScreen(
+                    height=size,
+                    aperture_size=aperture_size,
+                    fried_param=fried_param,
+                    outer_scale=outer_scale,
+                    random_seed=random_seed,
+                    stencil_length_factor=stencil_length_factor
+                )
+            ]
 
         phase_screens = []
         for dr0 in range(interval[0], interval[1] + 1):
@@ -112,18 +139,16 @@ class PhaseScreenContainer:
 
     @property
     def phase_screen(self) -> PhaseScreen:
-        phase_screen = random.choices(self.phase_screens, self.weights)
-        for i in range(random.randint(1, phase_screen.height)):
-            phase_screen.add_row()
+        phase_screen = random.choices(self.phase_screens, self.weights)[0]
         return phase_screen
 
 
 class DistortionController:
-    '''Exposes API to control application of distortion to image files
+    """Exposes API to control application of distortion to image files
     API is:
     * __init__: stores phase screen container
     * apply_distortion: initiates distortion process
-    '''
+    """
     def __init__(self, phase_screen_container: PhaseScreenContainer):
         self.phase_screen_container = phase_screen_container
 
@@ -164,13 +189,6 @@ class DistortionController:
         return pupil_mask
 
     def __atmospheric_distort(self, img: np.ndarray) -> np.ndarray:
-        '''Apply atmospheric distortion to input image
-        Parameters:
-            img (numpy.ndarray): Image to be distorted
-
-        Returns:
-            numpy.ndarray: numpy array representing the distorted image
-        '''
         pupil_mask = self.__circular_aperture(img)
         phase_screen = self.phase_screen_container.phase_screen
 
@@ -180,29 +198,38 @@ class DistortionController:
         stencil_length_factor = phase_screen.stencil_length_factor
 
         if using_cupy:
-            phase_screen = np.asarray(phase_screen)
+            phase_screen = np.asarray(phase_screen, dtype=np.float32)
 
+        # this sets each satellite pixel to max brightness. Remove this line if it interferes with dynamic brightness range
+        img[img > 0] = 255
         a = ifft2(pupil_mask * np.exp(1j * phase_screen))
         h = abs(abs(a) ** 2)
-        img_slice = ifft2(fft2(h) * fft2(img[:,:,1])).real
+        img = ifft2(fft2(h) * fft2(img[:,:,1])).real
 
-        img_slice /= np.max(img_slice)
-        img_slice *= 255
-        return np.repeat(img_slice[:,:,np.newaxis], 3, axis=2), aperture_size, fried_param, outer_scale, stencil_length_factor
+        img /= np.max(img)
+        img *= 255
+
+        return np.repeat(img[:,:,np.newaxis], 3, axis=2), aperture_size, fried_param, outer_scale, stencil_length_factor
 
     def __atmospheric_distort_image_file(self, filepath: pathlib.Path, output_directory: str) -> pathlib.Path:
         def make_distorted_image_filename(filename, aperture_size, fried_param, outer_scale, stencil_length_factor):
-            return '{}_{}_{}_{}_{}'.format(filename, aperture_size, fried_param, outer_scale, stencil_length_factor)
+            return '-'.join([
+                filename,
+                f'aperture_size={aperture_size}',
+                f'fried_param={fried_param}',
+                f'outer_scale={outer_scale}',
+                f'stencil_length_factor={stencil_length_factor}'
+            ])
 
         img = cv2.imread(str(filepath))
         if using_cupy:
             img = np.asarray(img)
-        img, aperture_size, fried_param, outer_scale, random_seed, stencil_length_factor = self.__atmospheric_distort(img)
+        img, aperture_size, fried_param, outer_scale, stencil_length_factor = self.__atmospheric_distort(img)
         if using_cupy:
             img = np.asnumpy(img)
 
         filename, ext = os.path.splitext(filepath.name)
-        new_filename = make_distorted_image_filename(filename)
+        new_filename = make_distorted_image_filename(filename, aperture_size, fried_param, outer_scale, stencil_length_factor)
         new_filepath = output_directory/str(filepath.name).replace(str(filename), new_filename)
         # print(new_filepath)
 
@@ -211,17 +238,26 @@ class DistortionController:
         return new_filepath
 
     def apply_distortion(self, source_directory: str, output_directory: str):
+        assert isinstance(source_directory, str), 'source-directory must be a valid path'
+        assert isinstance(output_directory, str), 'output-directory must be a valid path'
+
         source_directory = pathlib.Path(source_directory)
         output_directory = pathlib.Path(output_directory)
 
-        for _, _, files in os.walk(source_directory):
-            # print('attempting to distort image at: {}'.format(str(path)))
-            for path in files:
-                trimmed_path = pathlib.Path(*path.parts[len(source_directory.parts):]).parent
-                self.__atmospheric_distort_image_file(
-                    path,
-                    output_directory/trimmed_path
-                )
+        for root, _, files in os.walk(source_directory):
+            for path_str in files:
+                try:
+                    path = pathlib.Path(os.path.join(root, path_str))
+                    trimmed_path = pathlib.Path(*path.parts[len(source_directory.parts):]).parent
+                    self.__atmospheric_distort_image_file(
+                        path,
+                        output_directory/trimmed_path
+                    )
+                except Exception as e:
+                    if any(path_str.endswith(ext) for ext in ['.png', '.jpg']):
+                        raise e
+                    else:
+                        print(f'File at {path_str} is not an image -- {e}')
 
 
 def apply_atmospheric_distortion(
@@ -231,7 +267,7 @@ def apply_atmospheric_distortion(
         aperture_size: float,
         fried_param: float=None,
         outer_scale: int=None,
-        stencil_length_factor: int=4,
+        stencil_length_factor: int=None,
         random_seed: float=None,
         interval: List[int]=None,
         mean: float=None,
