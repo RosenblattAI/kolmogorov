@@ -32,7 +32,7 @@ if __name__ == '__main__':
                         help="optional parameter used with 'interval' to control a normal distribution pdf associated with the range of D/r0 values in the defined interval. Should be a value in the interval range. If not provided, pdf will be a uniform distribution.")
     parser.add_argument('--std', '-o', type=float,
                         help="optional parameter used with 'interval' and 'mean' to control a normal distribution pdf associated with the range of D/r0 values in the defined interval.")
-
+    
     args = parser.parse_args()
     try:
         apply_atmospheric_distortion(

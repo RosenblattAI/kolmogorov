@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import cv2
+import logging
 import os
 import pathlib
 import random
@@ -9,7 +10,7 @@ try:
     from cupy.fft import ifft2, fft2
     using_cupy = True
 except Exception as e:
-    print('cupy not found, defaulting to numpy. {}'.format(str(e)))
+    print(f'Unable to import cupy, defaulting to numpy. {str(e)}')
     import numpy as np
     from numpy.fft import ifft2, fft2
     using_cupy = False
@@ -22,7 +23,6 @@ from typing import List
 class PhaseScreen(PhaseScreenKolmogorov):
     """Wraps Kolmogorov phase screen and exposes values of interest
     """
-
     def __init__(self, height: int, aperture_size: float, fried_param: float, outer_scale: int, random_seed: int, stencil_length_factor: int):
         self.height = height
         self.aperture_size = aperture_size
