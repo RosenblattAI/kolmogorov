@@ -17,7 +17,9 @@ except Exception as e:
 import matplotlib.pyplot as plt
 from aotools.turbulence.infinitephasescreen import PhaseScreenKolmogorov
 from scipy.stats import norm
-from typing import List
+from typing import List, Tuple
+
+IMAGE_FILE_EXTENSIONS = ['.png', '.jpg']
 
 
 class PhaseScreen(PhaseScreenKolmogorov):
@@ -67,11 +69,11 @@ class PhaseScreenContainer:
                  outer_scale: int=None,
                  stencil_length_factor: int=None,
                  random_seed: float=None,
-                 interval: List[int]=None,
+                 interval: List[int, int]=None,
                  mean: float=None,
                  std: float=None):
-        assert size is not None, 'pixel length of image side must be provided'
-        assert aperture_size is not None, 'aperture size must be provided'
+        assert isinstance(size, int), 'pixel length of image side must be provided'
+        assert isinstance(aperture_size, float), 'aperture size must be provided'
 
         if interval is not None:
             assert len(interval) == 2 and \
@@ -80,7 +82,7 @@ class PhaseScreenContainer:
                     'Interval argument must be a list of 2 integers'
             assert fried_param is None, 'Interval argument is provided a value, fried-param must be None'
         else:
-            assert fried_param is not None, 'Interval argument is None, both aperture-size and fried-param must have a value'
+            assert isinstance(fried_param, float), 'Interval argument is None, both aperture-size and fried-param must have a value'
 
         outer_scale = outer_scale or 100
         stencil_length_factor = stencil_length_factor or 4
@@ -108,7 +110,7 @@ class PhaseScreenContainer:
             outer_scale: int,
             stencil_length_factor: int,
             random_seed: float,
-            interval: List[int]) -> List[PhaseScreen]:
+            interval: List[int, int]) -> List[PhaseScreen]:
         if not interval:
             return [
                 PhaseScreen(
@@ -133,7 +135,7 @@ class PhaseScreenContainer:
 
         return phase_screens
 
-    def __calculate_weights(self, interval: List[int], mean: float, std: float=1.0) -> List[int]:
+    def __calculate_weights(self, interval: List[int, int], mean: float, std: float=1.0) -> List[int]:
         normal_dist = norm(mean, std)
         return [normal_dist.pdf(dr0) for dr0 in range(interval[0], interval[1] + 1)]
 
@@ -188,7 +190,7 @@ class DistortionController:
 
         return pupil_mask
 
-    def __atmospheric_distort(self, img: np.ndarray) -> np.ndarray:
+    def __atmospheric_distort(self, img: np.ndarray) -> Tuple[np.ndarray, float, float, int, int]:
         pupil_mask = self.__circular_aperture(img)
         phase_screen = self.phase_screen_container.phase_screen
 
@@ -231,7 +233,6 @@ class DistortionController:
         filename, ext = os.path.splitext(filepath.name)
         new_filename = make_distorted_image_filename(filename, aperture_size, fried_param, outer_scale, stencil_length_factor)
         new_filepath = output_directory/str(filepath.name).replace(str(filename), new_filename)
-        # print(new_filepath)
 
         new_filepath.parents[0].mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(new_filepath), img)
@@ -248,13 +249,13 @@ class DistortionController:
             for path_str in files:
                 try:
                     path = pathlib.Path(os.path.join(root, path_str))
-                    trimmed_path = pathlib.Path(*path.parts[len(source_directory.parts):]).parent
+                    source_filepath_tail = pathlib.Path(*path.parts[len(source_directory.parts):]).parent
                     self.__atmospheric_distort_image_file(
                         path,
-                        output_directory/trimmed_path
+                        output_directory/source_filepath_tail
                     )
                 except Exception as e:
-                    if any(path_str.endswith(ext) for ext in ['.png', '.jpg']):
+                    if any(path_str.endswith(ext) for ext in IMAGE_FILE_EXTENSIONS):
                         raise e
                     else:
                         print(f'File at {path_str} is not an image -- {e}')
@@ -269,7 +270,7 @@ def apply_atmospheric_distortion(
         outer_scale: int=None,
         stencil_length_factor: int=None,
         random_seed: float=None,
-        interval: List[int]=None,
+        interval: List[int, int]=None,
         mean: float=None,
         std: float=None):
     PSC = PhaseScreenContainer(img_side_length, aperture_size, fried_param, outer_scale, stencil_length_factor, random_seed, interval, mean, std)

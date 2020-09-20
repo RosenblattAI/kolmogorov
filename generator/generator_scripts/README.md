@@ -104,10 +104,9 @@ optional arguments:
                         inclusive. Do not provide a value for 'Fried param' if
                         'interval' is used.  
   `--mean MEAN`, `-u MEAN`  optional parameter used with 'interval' to control a
-                        normal distribution pdf associated with the range of
-                        D/r0 values in the defined interval. Should be a value
-                        in the interval range. If not provided, pdf will be a
-                        uniform distribution.  
+                        normal distribution pdf curve superimposed on the range of
+                        D/r0 values in the defined interval. The probabilities for each D/r0 value is treated as relative.
+                        If not provided, the pdf will be a uniform distribution.  
   `--std STD`, `-o STD`     optional parameter used with 'interval' and 'mean' to
                         control a normal distribution pdf associated with the
                         range of D/r0 values in the defined interval.

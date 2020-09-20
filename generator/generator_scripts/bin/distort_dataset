@@ -52,4 +52,3 @@ if __name__ == '__main__':
     except Exception as e:
         print('Failed to apply distortion to images -- {}'.format(str(e)))
         raise e
-        sys.exit(1)
