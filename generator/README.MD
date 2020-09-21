@@ -13,4 +13,5 @@ Click on the Observatory object and enable only the GeneratorDemo.cs script. Pre
 ### Generator.cs
 Click on the Observatory object and enable only the Generator.cs script. Press the play button and wait as the dataset is generated. This process only takes about 4 minutes on an average laptop CPU. Once the script is complete you can navigate to the Dataset folder. The subdirectories will are named by the satellite images it contains. Each folder will contain 1000 224x224 pixel resolution PNG images of the satellite at different distances and orientations. To change the resolution or number of samples per class you must change the default arguments in the Start function.
 
-*Note: Some satellites fail to correctly render all images, this problem is currently being debugged*
+### SpaceScene.unity
+The observatory camera is locked to one axis to support easy interpretation of satellite angles within the ML training pipeline

@@ -5,19 +5,16 @@ Scripts and Python tools used for satellite situational research.
 This package installs the following CLI commands:
 
 * <pre>$ check_duplicates TARGET_DIR</pre>
-*  <pre>$ distort_dataset DIRECTORY_PATH \
-                   FILE_GLOB_STRING \
-                   OUTPUT_DIRECTORY_PATH \
-                   [APERTURE_SIZE:float \
-                   FRIED_PARAM:float \
-                   OUTER_SCALE:float \
-                   RANDOM_SEED:{none|int} \
-                   STENCIL_LENGTH_FACTOR:int]
+*  <pre>$ distort_dataset [-h] --side-length SIDE_LENGTH \
+                       --aperture-size APERTURE_SIZE \
+                       [--fried-param FRIED_PARAM] \
+                       [--outer-scale OUTER_SCALE] \
+                       [--stencil-length-factor STENCIL_LENGTH_FACTOR] \
+                       [--random-seed RANDOM_SEED] \
+                       [--interval INTERVAL INTERVAL] [--mean MEAN] \
+                       [--std STD] \
+                       source_directory output_directory
    </pre>
-* <pre>$ generic_dataset SAMPLE_DIRECTORY \
-                  OUTPUT_DIRECTORY \
-                  [SAMPLE_CLASS=RATIO:float ...]</pre>
-
 ## Installation
 
 1. Clone the repository to your computer:
@@ -30,17 +27,20 @@ This package installs the following CLI commands:
 
 You will then have the previously listed scripts available to you, and, in a Python language environment, can import the distortion module:
 ```
-from generator_scripts.distortion import atmospheric_distort_directory
+from generator_scripts.distortion import apply_atmospheric_distortion
 
-atmospheric_distort_directory(
-    directory_path,
-    file_glob_matcher,
-    output_directory,
-    aperture_size,
-    fried_param,
-    outer_scale,
-    random_seed,
-    stencil_length_factor
+apply_atmospheric_distortion(
+    source_directory: str,
+    output_directory: str,
+    img_side_length: int,
+    aperture_size: float,
+    fried_param: float,
+    outer_scale: int,
+    stencil_length_factor: int,
+    random_seed: float,
+    interval: List[int, int],
+    mean: float,
+    std: float
 )
 ```
 
@@ -54,67 +54,59 @@ This is a minimal script that checks if there are any images that have the same 
 
 ### distort_dataset
 
-<pre>$ distort_dataset DIRECTORY_PATH \
-                   FILE_GLOB_STRING \
-                   OUTPUT_DIRECTORY_PATH \
-                   [APERTURE_SIZE:float \
-                   FRIED_PARAM:float \
-                   OUTER_SCALE:float \
-                   RANDOM_SEED:{none|int} \
-                   STENCIL_LENGTH_FACTOR:int]
+<pre>$ distort_dataset [-h] --side-length SIDE_LENGTH \
+                       --aperture-size APERTURE_SIZE \
+                       [--fried-param FRIED_PARAM] \
+                       [--outer-scale OUTER_SCALE] \
+                       [--stencil-length-factor STENCIL_LENGTH_FACTOR] \
+                       [--random-seed RANDOM_SEED] \
+                       [--interval INTERVAL INTERVAL] [--mean MEAN] \
+                       [--std STD] \
+                       source_directory output_directory
 </pre>
 
 Applies an approximate filter that replicates atmospheric distortion to images in a directory whose filenames match the provided glob pattern, and then stores the results in the target directory. The filepaths excluding the sample directory name are appended to the target directory.
 
+### Arguments:
+
+  `-h`, `--help`            show this help message and exit  
+
+positional arguments:  
+  `source_directory`      absolute or relative path to directory containing
+                        images  
+  `output_directory`      absolute or relative path to where distorted images
+                        will be saved
+
 The distortion characteristics can be controlled using the cli args (passed after the sample directory, glob pattern, and target directory):
 
-1. `aperture_size` (float): The size of the telescope aperture in meters.
-2. `fried_param` (float): Size of atmospheric coherence length (Fried param) in meters
-3. `outer_scale` (float): Described in the [AOTools Kolmogorov Phase Screen docs](https://aotools.readthedocs.io/en/v1.0.1/turbulence.html?highlight=L0#aotools.turbulence.infinitephasescreen.PhaseScreenKolmogorov)
-4. `random_seed` (int): Control the randomness (pass "none" to ignore)
-5. `stencil_length_factor` (int): Described in the [AOTools Kolmogorov Phase Screen docs](https://aotools.readthedocs.io/en/v1.0.1/turbulence.html?highlight=stencil_length_factor#aotools.turbulence.infinitephasescreen.PhaseScreenKolmogorov)
-
-### generic_dataset
-
-<pre>$ generic_dataset SAMPLE_DIRECTORY \
-                  OUTPUT_DIRECTORY \
-                  [SAMPLE_CLASS=RATIO:float ...]
-</pre>
-
-Given a sample directory that contains distinct datasets of satellite classes/images, create a new dataset that contains a specified portion of samples from each distinct dataset. Note that the ratio is relative to the number of samples belonging to a distinct dataset, and not relative to the number of samples in the final dataset. You can pass any number of distinct dataset dirs along with the required ratio using the `SAMPLE_CLASS` arg described above.
-
-Defaults to:
-* not_distorted: 0.15
-* less_distorted: 0.75
-* more_distorted: 0.10
-
-The expected folder structure would be as follows:
-```
-sample_directory
-|___ not_distorted
-|    |___ training
-|    |    |___ satellite_class
-|    |    |___ another_satellite_class
-|    |
-|    |___ validation
-|         |___ satellite_class
-|         |___ another_satellite_class
-|
-|___ less_distorted
-|    |___ ...
-|
-|___ more_distorted
-     |___ ...
-```
-
-The output structure is as follows:
-```
-output_directory
-|___ training
-|    |___ satellite_class
-|    |___ another_satellite_class
-|
-|___ validation
-     |___ satellite_class
-     |___ another_satellite_class
-```
+optional arguments:  
+  `--side-length SIDE_LENGTH`, `-l SIDE_LENGTH`
+                        the number of pixels along one side of the (square)
+                        images  
+  `--aperture-size APERTURE_SIZE`, `-a APERTURE_SIZE`
+                        size of the telescope aperture in meters (8 is a good
+                        value)  
+  `--fried-param FRIED_PARAM`, `-f FRIED_PARAM`
+                        Fried param in meters used to generate Kolmogorov
+                        phase screen (AOTools library)  
+  `--outer-scale OUTER_SCALE`, `-x OUTER_SCALE`
+                        outer scale in meters used to generate Kolmogorov
+                        phase screen (AOTools library)  
+  `--stencil-length-factor STENCIL_LENGTH_FACTOR`, `-s STENCIL_LENGTH_FACTOR`
+                        stencil length factor used to generate Kolmogorov
+                        phase screen (AOTools library), defaults to 4  
+  `--random-seed RANDOM_SEED`, `-r RANDOM_SEED`
+                        integer value to control randomness  
+  `--interval INTERVAL INTERVAL`, `-i INTERVAL INTERVAL`
+                        optional parameter to define a range of D/r0 values
+                        for a set of Kolmogorov phase screens randomly applied
+                        to each image. Expects two integer values, and is
+                        inclusive. Do not provide a value for 'Fried param' if
+                        'interval' is used.  
+  `--mean MEAN`, `-u MEAN`  optional parameter used with 'interval' to control a
+                        normal distribution pdf curve superimposed on the range of
+                        D/r0 values in the defined interval. The probabilities for each D/r0 value is treated as relative.
+                        If not provided, the pdf will be a uniform distribution.  
+  `--std STD`, `-o STD`     optional parameter used with 'interval' and 'mean' to
+                        control a normal distribution pdf associated with the
+                        range of D/r0 values in the defined interval.
